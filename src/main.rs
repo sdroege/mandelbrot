@@ -181,6 +181,33 @@ fn create_image(
     surface
 }
 
+fn calculate_selection_rectangle(
+    x1: f64,
+    x2: f64,
+    y1: f64,
+    y2: f64,
+    surface_size: (usize, usize),
+) -> (f64, f64, f64, f64) {
+    let (width, height) = ((x2 - x1), (y2 - y1));
+    let (xscale, yscale) = (
+        (width / surface_size.0 as f64).abs(),
+        (height / surface_size.1 as f64).abs(),
+    );
+    let (width, height) = if xscale > yscale {
+        (
+            width,
+            height.signum() * (width as f64 * surface_size.1 as f64 / surface_size.0 as f64).abs(),
+        )
+    } else {
+        (
+            width.signum() * (height as f64 * surface_size.0 as f64 / surface_size.1 as f64).abs(),
+            height,
+        )
+    };
+
+    (x1, y1, width, height)
+}
+
 fn build_ui(application: &gtk::Application) {
     let window = gtk::ApplicationWindow::new(application);
     let area = gtk::DrawingArea::new();
@@ -256,28 +283,21 @@ fn build_ui(application: &gtk::Application) {
             let selection = app.selection.borrow_mut().take();
 
             if let Some(((x1, y1), Some((x2, y2)))) = selection {
-                let surface_size = *app.surface_size.borrow();
-                let (x1, x2, y1, y2) = (x1 as f64, x2 as f64, y1 as f64, y2 as f64);
-                let width = x2 - x1;
-                let height = y2 - y1;
+                let surface_size = app.surface_size.borrow();
 
-                let (width, height) = if width > height {
-                    (
-                        width,
-                        width as f64 * surface_size.1 as f64 / surface_size.0 as f64,
-                    )
-                } else {
-                    (
-                        height as f64 * surface_size.0 as f64 / surface_size.1 as f64,
-                        height,
-                    )
-                };
+                let (x, y, width, height) = calculate_selection_rectangle(
+                    x1 as f64,
+                    x2 as f64,
+                    y1 as f64,
+                    y2 as f64,
+                    *surface_size,
+                );
 
                 let (x1, x2, y1, y2) = (
-                    x1.min(x1 + width),
-                    x1.max(x1 + width),
-                    y1.min(y1 + height),
-                    y1.max(y1 + height),
+                    x.min(x + width),
+                    x.max(x + width),
+                    y.min(y + height),
+                    y.max(y + height),
                 );
 
                 let old_view = *app.view.borrow();
@@ -342,25 +362,24 @@ fn build_ui(application: &gtk::Application) {
         }
 
         if let Some(((x1, y1), Some((x2, y2)))) = *app.selection.borrow() {
-            let (x1, x2, y1, y2) = (x1 as f64, x2 as f64, y1 as f64, y2 as f64);
-            let width = x2 - x1;
-            let height = y2 - y1;
+            let (x, y, width, height) = calculate_selection_rectangle(
+                x1 as f64,
+                x2 as f64,
+                y1 as f64,
+                y2 as f64,
+                *surface_size,
+            );
 
-            let (width, height) = if width > height {
-                (
-                    width,
-                    width as f64 * surface_size.1 as f64 / surface_size.0 as f64,
-                )
-            } else {
-                (
-                    height as f64 * surface_size.0 as f64 / surface_size.1 as f64,
-                    height,
-                )
-            };
-
-            cr.rectangle(x1, y1, width, height);
+            cr.save();
+            cr.set_line_width(1.0);
+            cr.rectangle(x, y, width, height);
             cr.set_source_rgb(1.0, 1.0, 1.0);
             cr.stroke();
+
+            cr.rectangle(x, y, width, height);
+            cr.set_source_rgba(1.0, 1.0, 1.0, 0.2);
+            cr.fill();
+            cr.restore();
         }
 
         Inhibit(false)
