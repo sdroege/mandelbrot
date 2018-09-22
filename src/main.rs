@@ -107,7 +107,14 @@ struct App {
     selection: RefCell<Option<((f64, f64), Option<(f64, f64)>)>>,
 }
 
-fn create_image(x: f64, y: f64, width: f64, height: f64, target_width: usize, target_height: usize) -> cairo::ImageSurface {
+fn create_image(
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    target_width: usize,
+    target_height: usize,
+) -> cairo::ImageSurface {
     let mut pixels: Vec<Pixel> = Vec::with_capacity(target_width * target_height);
     unsafe {
         pixels.set_len(target_width * target_height);
@@ -244,7 +251,6 @@ fn build_ui(application: &gtk::Application) {
         if ev.get_button() == 1 {
             let selection = app.selection.borrow_mut().take();
 
-
             if let Some(((x1, y1), Some((x2, y2)))) = selection {
                 let surface_size = *app.surface_size.borrow();
                 let (x1, x2, y1, y2) = (x1 as f64, x2 as f64, y1 as f64, y2 as f64);
@@ -252,9 +258,15 @@ fn build_ui(application: &gtk::Application) {
                 let height = y2 - y1;
 
                 let (width, height) = if width > height {
-                    (width, width as f64 * surface_size.1 as f64 / surface_size.0 as f64)
+                    (
+                        width,
+                        width as f64 * surface_size.1 as f64 / surface_size.0 as f64,
+                    )
                 } else {
-                    (height as f64 * surface_size.0 as f64 / surface_size.1 as f64, height)
+                    (
+                        height as f64 * surface_size.0 as f64 / surface_size.1 as f64,
+                        height,
+                    )
                 };
 
                 let (x1, x2, y1, y2) = (
@@ -270,11 +282,7 @@ fn build_ui(application: &gtk::Application) {
                 let view_x2 = old_view.0 + (x2 / surface_size.0 as f64) * old_view.2;
                 let view_y2 = old_view.1 + (y2 / surface_size.1 as f64) * old_view.3;
 
-                *app.view.borrow_mut() = (
-                    view_x1, view_y1,
-                    view_x2 - view_x1,
-                    view_y2 - view_y1,
-                );
+                *app.view.borrow_mut() = (view_x1, view_y1, view_x2 - view_x1, view_y2 - view_y1);
 
                 let _ = app.surface.borrow_mut().take();
                 area.queue_draw();
@@ -311,7 +319,14 @@ fn build_ui(application: &gtk::Application) {
         let surface_size = app.surface_size.borrow();
         if app.surface.borrow().is_none() {
             let view = app.view.borrow();
-            *app.surface.borrow_mut() = Some(create_image(view.0, view.1, view.2, view.3, surface_size.0 * 2, surface_size.1 * 2));
+            *app.surface.borrow_mut() = Some(create_image(
+                view.0,
+                view.1,
+                view.2,
+                view.3,
+                surface_size.0 * 2,
+                surface_size.1 * 2,
+            ));
         }
 
         if let Some(ref surface) = app.surface.borrow().as_ref() {
@@ -328,9 +343,15 @@ fn build_ui(application: &gtk::Application) {
             let height = y2 - y1;
 
             let (width, height) = if width > height {
-                (width, width as f64 * surface_size.1 as f64 / surface_size.0 as f64)
+                (
+                    width,
+                    width as f64 * surface_size.1 as f64 / surface_size.0 as f64,
+                )
             } else {
-                (height as f64 * surface_size.0 as f64 / surface_size.1 as f64, height)
+                (
+                    height as f64 * surface_size.0 as f64 / surface_size.1 as f64,
+                    height,
+                )
             };
 
             cr.rectangle(x1, y1, width, height);
