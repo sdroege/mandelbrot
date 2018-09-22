@@ -42,6 +42,12 @@ struct Pixel {
     r: u8,
     x: u8,
 }
+struct App {
+    view: RefCell<(f64, f64, f64, f64)>,
+    surface_size: RefCell<(usize, usize)>,
+    surface: RefCell<Option<cairo::ImageSurface>>,
+    selection: RefCell<Option<((f64, f64), Option<(f64, f64)>)>>,
+}
 
 lazy_static! {
     static ref COLORS: [Pixel; 360] = {
@@ -112,13 +118,6 @@ fn pixels_to_bytes(mut pixels: Vec<Pixel>) -> Vec<u8> {
 
         new_pixels
     }
-}
-
-struct App {
-    view: RefCell<(f64, f64, f64, f64)>,
-    surface_size: RefCell<(usize, usize)>,
-    surface: RefCell<Option<cairo::ImageSurface>>,
-    selection: RefCell<Option<((f64, f64), Option<(f64, f64)>)>>,
 }
 
 fn create_image(
@@ -208,6 +207,120 @@ fn calculate_selection_rectangle(
     (x1, y1, width, height)
 }
 
+impl App {
+    fn on_draw(&self, cr: &cairo::Context) {
+        let surface_size = self.surface_size.borrow();
+        if self.surface.borrow().is_none() {
+            let view = self.view.borrow();
+            *self.surface.borrow_mut() = Some(create_image(
+                view.0,
+                view.1,
+                view.2,
+                view.3,
+                surface_size.0 * 2,
+                surface_size.1 * 2,
+            ));
+        }
+
+        if let Some(ref surface) = self.surface.borrow().as_ref() {
+            cr.save();
+            cr.scale(0.5, 0.5);
+            cr.set_source_surface(surface, 0.0, 0.0);
+            cr.paint();
+            cr.restore();
+        }
+
+        if let Some(((x1, y1), Some((x2, y2)))) = *self.selection.borrow() {
+            let (x, y, width, height) = calculate_selection_rectangle(
+                x1 as f64,
+                x2 as f64,
+                y1 as f64,
+                y2 as f64,
+                *surface_size,
+            );
+
+            cr.save();
+            cr.set_line_width(1.0);
+            cr.rectangle(x, y, width, height);
+            cr.set_source_rgb(1.0, 1.0, 1.0);
+            cr.stroke();
+
+            cr.rectangle(x, y, width, height);
+            cr.set_source_rgba(1.0, 1.0, 1.0, 0.2);
+            cr.fill();
+            cr.restore();
+        }
+    }
+
+    fn on_motion_notify(&self, area: &gtk::DrawingArea, ev: &gdk::EventMotion) {
+        if ev.get_state().contains(gdk::ModifierType::BUTTON1_MASK) {
+            if let Some(ref mut selection) = &mut *self.selection.borrow_mut() {
+                *selection = (selection.0, Some(ev.get_position()));
+                area.queue_draw();
+            }
+        }
+    }
+
+    fn on_button_press(&self, _area: &gtk::DrawingArea, ev: &gdk::EventButton) {
+        if ev.get_button() == 1 {
+            *self.selection.borrow_mut() = Some((ev.get_position(), None));
+        }
+    }
+
+    fn on_button_release(&self, area: &gtk::DrawingArea, ev: &gdk::EventButton) {
+        if ev.get_button() == 1 {
+            let selection = self.selection.borrow_mut().take();
+
+            if let Some(((x1, y1), Some((x2, y2)))) = selection {
+                let surface_size = self.surface_size.borrow();
+
+                let (x, y, width, height) = calculate_selection_rectangle(
+                    x1 as f64,
+                    x2 as f64,
+                    y1 as f64,
+                    y2 as f64,
+                    *surface_size,
+                );
+
+                let (x1, x2, y1, y2) = (
+                    x.min(x + width),
+                    x.max(x + width),
+                    y.min(y + height),
+                    y.max(y + height),
+                );
+
+                let old_view = *self.view.borrow();
+                let view_x1 = old_view.0 + (x1 / surface_size.0 as f64) * old_view.2;
+                let view_y1 = old_view.1 + (y1 / surface_size.1 as f64) * old_view.3;
+                let view_x2 = old_view.0 + (x2 / surface_size.0 as f64) * old_view.2;
+                let view_y2 = old_view.1 + (y2 / surface_size.1 as f64) * old_view.3;
+
+                *self.view.borrow_mut() = (view_x1, view_y1, view_x2 - view_x1, view_y2 - view_y1);
+
+                let _ = self.surface.borrow_mut().take();
+                area.queue_draw();
+            }
+        }
+    }
+
+    fn on_size_allocate(&self, area: &gtk::DrawingArea, allocation: &gdk::Rectangle) {
+        let old_size = *self.surface_size.borrow();
+        let new_size = (allocation.width as usize, allocation.height as usize);
+        if new_size != old_size {
+            let mut view = self.view.borrow_mut();
+
+            if old_size.0 != 0 && old_size.1 != 0 && new_size.0 != 0 && new_size.1 != 0 {
+                view.2 = view.2 as f64 * new_size.0 as f64 / old_size.0 as f64;
+                view.3 = view.3 as f64 * new_size.1 as f64 / old_size.1 as f64;
+            }
+
+            *self.surface_size.borrow_mut() = new_size;
+            let _ = self.surface.borrow_mut().take();
+            area.queue_draw();
+        }
+    }
+}
+
 fn build_ui(application: &gtk::Application) {
     let window = gtk::ApplicationWindow::new(application);
     let area = gtk::DrawingArea::new();
@@ -237,151 +350,40 @@ fn build_ui(application: &gtk::Application) {
 
     let app_weak = Rc::downgrade(&app);
     area.connect_size_allocate(move |area, allocation| {
-        let app = match app_weak.upgrade() {
-            None => return,
-            Some(app) => app,
-        };
-
-        let old_size = *app.surface_size.borrow();
-        let new_size = (allocation.width as usize, allocation.height as usize);
-        if new_size != old_size {
-            let mut view = app.view.borrow_mut();
-
-            if old_size.0 != 0 && old_size.1 != 0 && new_size.0 != 0 && new_size.1 != 0 {
-                view.2 = view.2 as f64 * new_size.0 as f64 / old_size.0 as f64;
-                view.3 = view.3 as f64 * new_size.1 as f64 / old_size.1 as f64;
-            }
-
-            *app.surface_size.borrow_mut() = new_size;
-            let _ = app.surface.borrow_mut().take();
-            area.queue_draw();
+        if let Some(app) = app_weak.upgrade() {
+            app.on_size_allocate(area, allocation);
         }
     });
 
     let app_weak = Rc::downgrade(&app);
-    area.connect_button_press_event(move |_, ev| {
-        let app = match app_weak.upgrade() {
-            None => return Inhibit(false),
-            Some(app) => app,
-        };
-
-        if ev.get_button() == 1 {
-            *app.selection.borrow_mut() = Some((ev.get_position(), None));
+    area.connect_button_press_event(move |area, ev| {
+        if let Some(app) = app_weak.upgrade() {
+            app.on_button_press(area, ev);
         }
-
         Inhibit(false)
     });
 
     let app_weak = Rc::downgrade(&app);
     area.connect_button_release_event(move |area, ev| {
-        let app = match app_weak.upgrade() {
-            None => return Inhibit(false),
-            Some(app) => app,
-        };
-
-        if ev.get_button() == 1 {
-            let selection = app.selection.borrow_mut().take();
-
-            if let Some(((x1, y1), Some((x2, y2)))) = selection {
-                let surface_size = app.surface_size.borrow();
-
-                let (x, y, width, height) = calculate_selection_rectangle(
-                    x1 as f64,
-                    x2 as f64,
-                    y1 as f64,
-                    y2 as f64,
-                    *surface_size,
-                );
-
-                let (x1, x2, y1, y2) = (
-                    x.min(x + width),
-                    x.max(x + width),
-                    y.min(y + height),
-                    y.max(y + height),
-                );
-
-                let old_view = *app.view.borrow();
-                let view_x1 = old_view.0 + (x1 / surface_size.0 as f64) * old_view.2;
-                let view_y1 = old_view.1 + (y1 / surface_size.1 as f64) * old_view.3;
-                let view_x2 = old_view.0 + (x2 / surface_size.0 as f64) * old_view.2;
-                let view_y2 = old_view.1 + (y2 / surface_size.1 as f64) * old_view.3;
-
-                *app.view.borrow_mut() = (view_x1, view_y1, view_x2 - view_x1, view_y2 - view_y1);
-
-                let _ = app.surface.borrow_mut().take();
-                area.queue_draw();
-            }
+        if let Some(app) = app_weak.upgrade() {
+            app.on_button_release(area, ev);
         }
-
         Inhibit(false)
     });
 
     let app_weak = Rc::downgrade(&app);
     area.connect_motion_notify_event(move |area, ev| {
-        let app = match app_weak.upgrade() {
-            None => return Inhibit(false),
-            Some(app) => app,
-        };
-
-        if ev.get_state().contains(gdk::ModifierType::BUTTON1_MASK) {
-            if let Some(ref mut selection) = &mut *app.selection.borrow_mut() {
-                *selection = (selection.0, Some(ev.get_position()));
-                area.queue_draw();
-            }
+        if let Some(app) = app_weak.upgrade() {
+            app.on_motion_notify(area, ev);
         }
-
         Inhibit(false)
     });
 
     let app_weak = Rc::downgrade(&app);
     area.connect_draw(move |_, cr| {
-        let app = match app_weak.upgrade() {
-            None => return Inhibit(false),
-            Some(app) => app,
-        };
-
-        let surface_size = app.surface_size.borrow();
-        if app.surface.borrow().is_none() {
-            let view = app.view.borrow();
-            *app.surface.borrow_mut() = Some(create_image(
-                view.0,
-                view.1,
-                view.2,
-                view.3,
-                surface_size.0 * 2,
-                surface_size.1 * 2,
-            ));
+        if let Some(app) = app_weak.upgrade() {
+            app.on_draw(cr);
         }
-
-        if let Some(ref surface) = app.surface.borrow().as_ref() {
-            cr.save();
-            cr.scale(0.5, 0.5);
-            cr.set_source_surface(surface, 0.0, 0.0);
-            cr.paint();
-            cr.restore();
-        }
-
-        if let Some(((x1, y1), Some((x2, y2)))) = *app.selection.borrow() {
-            let (x, y, width, height) = calculate_selection_rectangle(
-                x1 as f64,
-                x2 as f64,
-                y1 as f64,
-                y2 as f64,
-                *surface_size,
-            );
-
-            cr.save();
-            cr.set_line_width(1.0);
-            cr.rectangle(x, y, width, height);
-            cr.set_source_rgb(1.0, 1.0, 1.0);
-            cr.stroke();
-
-            cr.rectangle(x, y, width, height);
-            cr.set_source_rgba(1.0, 1.0, 1.0, 0.2);
-            cr.fill();
-            cr.restore();
-        }
-
         Inhibit(false)
     });
 
