@@ -128,13 +128,11 @@ fn create_image(
     target_width: usize,
     target_height: usize,
 ) -> cairo::ImageSurface {
-    let mut pixels: Vec<Pixel> = Vec::with_capacity(target_width * target_height);
-    unsafe {
-        pixels.set_len(target_width * target_height);
-    }
-
-    for target_y in 0..target_height {
-        for target_x in 0..target_width {
+    use std::iter;
+    let pixels = (0..target_height)
+        .map(|target_y| (0..target_width).zip(iter::repeat(target_y)))
+        .flatten()
+        .map(|(target_x, target_y)| {
             let c = Complex64::new(
                 x + (target_x as f64 / (target_width as f64 - 1.0)) * width,
                 y + (target_y as f64 / (target_height as f64 - 1.0)) * height,
@@ -149,7 +147,7 @@ fn create_image(
                 it += 1;
             }
 
-            let c = if (it as usize) < max_it {
+            if (it as usize) < max_it {
                 let log_zn = z.norm_sqr().ln() / 2.0;
                 let nu = (log_zn / 2.0f64.ln()).ln() / 2.0f64.ln();
 
@@ -159,13 +157,9 @@ fn create_image(
                 c1.interpolate(&c2, it.fract())
             } else {
                 Pixel::default()
-            };
-
-            unsafe {
-                *pixels.get_unchecked_mut(target_y * target_width + target_x) = c;
             }
-        }
-    }
+        }).collect::<Vec<_>>();
+
     assert_eq!(pixels.len(), target_width * target_height);
     let pixels = pixels_to_bytes(pixels);
 
