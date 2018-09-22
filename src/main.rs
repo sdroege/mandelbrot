@@ -83,6 +83,20 @@ impl Pixel {
     fn new(r: u8, g: u8, b: u8) -> Self {
         Pixel { x: 0, r, g, b }
     }
+
+    fn interpolate(&self, other: &Self, frac: f64) -> Self {
+        Pixel::new(
+            (self.r as f64 + (frac * (other.r as f64 - self.r as f64)))
+                .max(0.0)
+                .min(255.0) as u8,
+            (self.g as f64 + (frac * (other.g as f64 - self.g as f64)))
+                .max(0.0)
+                .min(255.0) as u8,
+            (self.b as f64 + (frac * (other.b as f64 - self.b as f64)))
+                .max(0.0)
+                .min(255.0) as u8,
+        )
+    }
 }
 
 fn pixels_to_bytes(mut pixels: Vec<Pixel>) -> Vec<u8> {
@@ -143,17 +157,7 @@ fn create_image(
                 let it = it as f64 + 1.0 - nu;
                 let c1 = COLORS[it.floor() as usize % 360];
                 let c2 = COLORS[(it.floor() + 1.0) as usize % 360];
-                Pixel::new(
-                    (c1.r as f64 + (it.fract() * (c2.r as f64 - c1.r as f64)))
-                        .max(0.0)
-                        .min(255.0) as u8,
-                    (c1.g as f64 + (it.fract() * (c2.g as f64 - c1.g as f64)))
-                        .max(0.0)
-                        .min(255.0) as u8,
-                    (c1.b as f64 + (it.fract() * (c2.b as f64 - c1.b as f64)))
-                        .max(0.0)
-                        .min(255.0) as u8,
-                )
+                c1.interpolate(&c2, it.fract())
             } else {
                 Pixel::default()
             };
