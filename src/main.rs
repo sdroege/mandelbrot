@@ -16,6 +16,9 @@ use cairo::prelude::*;
 #[macro_use]
 extern crate lazy_static;
 
+extern crate num_complex;
+use num_complex::Complex64;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -112,23 +115,22 @@ fn create_image(x: f64, y: f64, width: f64, height: f64, target_width: usize, ta
 
     for target_y in 0..target_height {
         for target_x in 0..target_width {
-            let x0 = x + (target_x as f64 / (target_width as f64 - 1.0)) * width;
-            let y0 = y + (target_y as f64 / (target_height as f64 - 1.0)) * height;
+            let c = Complex64::new(
+                x + (target_x as f64 / (target_width as f64 - 1.0)) * width,
+                y + (target_y as f64 / (target_height as f64 - 1.0)) * height,
+            );
 
-            let mut x = 0.0;
-            let mut y = 0.0;
+            let mut z = Complex64::new(0.0, 0.0);
             let mut it = 0;
             let max_it = 1000;
 
-            while x * x + y * y < ((1 << 16) as f64) && it < max_it {
-                let xtemp = x * x - y * y + x0;
-                y = 2.0 * x * y + y0;
-                x = xtemp;
+            while z.norm_sqr() < ((1 << 16) as f64) && it < max_it {
+                z = z * z + c;
                 it += 1;
             }
 
             let c = if (it as usize) < max_it {
-                let log_zn = (x * x + y * y).ln() / 2.0;
+                let log_zn = z.norm_sqr().ln() / 2.0;
                 let nu = (log_zn / 2.0f64.ln()).ln() / 2.0f64.ln();
 
                 let it = it as f64 + 1.0 - nu;
