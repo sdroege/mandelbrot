@@ -121,6 +121,8 @@ fn pixels_to_bytes(mut pixels: Vec<Pixel>) -> Vec<u8> {
     unsafe {
         use std::mem;
 
+        assert_eq!(4 * mem::size_of::<u8>(), mem::size_of::<Pixel>());
+
         let new_pixels = Vec::from_raw_parts(
             pixels.as_mut_ptr() as *mut u8,
             pixels.len() * 4,
