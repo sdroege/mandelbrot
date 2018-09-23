@@ -301,11 +301,9 @@ impl App {
         let old_size = self.surface_size;
         let new_size = (allocation.width as usize, allocation.height as usize);
         if new_size != old_size {
-            let mut view = self.view;
-
             if old_size.0 != 0 && old_size.1 != 0 && new_size.0 != 0 && new_size.1 != 0 {
-                view.2 = view.2 as f64 * new_size.0 as f64 / old_size.0 as f64;
-                view.3 = view.3 as f64 * new_size.1 as f64 / old_size.1 as f64;
+                self.view.2 = self.view.2 * new_size.0 as f64 / old_size.0 as f64;
+                self.view.3 = self.view.3 * new_size.1 as f64 / old_size.1 as f64;
             }
 
             self.surface_size = new_size;
