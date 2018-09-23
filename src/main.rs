@@ -19,6 +19,9 @@ extern crate lazy_static;
 extern crate num_complex;
 use num_complex::Complex64;
 
+extern crate rayon;
+use rayon::prelude::*;
+
 extern crate futures;
 use futures::channel::mpsc as futures_mpsc;
 use futures::prelude::*;
@@ -137,10 +140,9 @@ fn create_image(
     target_width: usize,
     target_height: usize,
 ) -> cairo::ImageSurface {
-    use std::iter;
     let pixels = (0..target_height)
-        .map(|target_y| (0..target_width).zip(iter::repeat(target_y)))
-        .flatten()
+        .into_par_iter()
+        .flat_map(|target_y| rayon::iter::repeatn(target_y, target_width).enumerate())
         .map(|(target_x, target_y)| {
             let c = Complex64::new(
                 x + (target_x as f64 / (target_width as f64 - 1.0)) * width,
