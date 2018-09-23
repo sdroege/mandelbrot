@@ -19,6 +19,12 @@ extern crate lazy_static;
 extern crate num_complex;
 use num_complex::Complex64;
 
+extern crate futures;
+use futures::channel::mpsc as futures_mpsc;
+use futures::prelude::*;
+
+use std::sync::mpsc as std_mpsc;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -47,6 +53,8 @@ struct App {
     surface_size: (usize, usize),
     surface: Option<cairo::ImageSurface>,
     selection: Option<((f64, f64), Option<(f64, f64)>)>,
+    drawing_area: gtk::DrawingArea,
+    command_sender: std_mpsc::Sender<Command>,
 }
 
 lazy_static! {
@@ -174,6 +182,51 @@ fn create_image(
     surface
 }
 
+#[derive(Debug)]
+enum Command {
+    Render {
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+        target_width: usize,
+        target_height: usize,
+    },
+    Quit,
+}
+
+fn render_thread(
+    commands: std_mpsc::Receiver<Command>,
+    surfaces: futures_mpsc::UnboundedSender<cairo::ImageSurface>,
+) {
+    loop {
+        let mut command = commands.recv().unwrap();
+
+        // Get last command that was ever send, but always break on quit
+        while let Ok(cmd) = commands.try_recv() {
+            command = cmd;
+            if let Command::Quit = command {
+                break;
+            }
+        }
+
+        match command {
+            Command::Quit => break,
+            Command::Render {
+                x,
+                y,
+                width,
+                height,
+                target_width,
+                target_height,
+            } => {
+                let surface = create_image(x, y, width, height, target_width, target_height);
+                surfaces.unbounded_send(surface).unwrap();
+            }
+        }
+    }
+}
+
 fn calculate_selection_rectangle(
     x1: f64,
     x2: f64,
@@ -204,22 +257,18 @@ fn calculate_selection_rectangle(
 impl App {
     fn on_draw(&mut self, cr: &cairo::Context) {
         let surface_size = self.surface_size;
-        if self.surface.is_none() {
-            let view = self.view;
-            self.surface = Some(create_image(
-                view.0,
-                view.1,
-                view.2,
-                view.3,
-                surface_size.0 * 2,
-                surface_size.1 * 2,
-            ));
-        }
 
-        if let Some(ref surface) = self.surface.as_ref() {
+        if let Some(ref surface) = self.surface {
             cr.save();
             cr.scale(0.5, 0.5);
+            cr.set_operator(cairo::Operator::Source);
             cr.set_source_surface(surface, 0.0, 0.0);
+            cr.paint();
+            cr.restore();
+        } else {
+            cr.save();
+            cr.set_operator(cairo::Operator::Clear);
+            cr.set_source_rgb(0.0, 0.0, 0.0);
             cr.paint();
             cr.restore();
         }
@@ -293,6 +342,7 @@ impl App {
 
                 let _ = self.surface.take();
                 area.queue_draw();
+                self.trigger_render();
             }
         }
     }
@@ -309,11 +359,44 @@ impl App {
             self.surface_size = new_size;
             let _ = self.surface.take();
             area.queue_draw();
+            self.trigger_render();
         }
+    }
+
+    fn on_render_done(&mut self, surface: cairo::ImageSurface) {
+        self.surface = Some(surface);
+        self.drawing_area.queue_draw();
+    }
+
+    fn trigger_render(&self) {
+        self.command_sender
+            .send(Command::Render {
+                x: self.view.0,
+                y: self.view.1,
+                width: self.view.2,
+                height: self.view.3,
+                target_width: self.surface_size.0 * 2,
+                target_height: self.surface_size.1 * 2,
+            }).unwrap();
+    }
+}
+
+impl Drop for App {
+    fn drop(&mut self) {
+        let _ = self.command_sender.send(Command::Quit);
     }
 }
 
 fn build_ui(application: &gtk::Application) {
+    use std::thread;
+
+    let (command_sender, command_receiver) = std_mpsc::channel();
+    let (surface_sender, surface_receiver) = futures_mpsc::unbounded();
+
+    thread::spawn(move || {
+        render_thread(command_receiver, surface_sender);
+    });
+
     let window = gtk::ApplicationWindow::new(application);
     let area = gtk::DrawingArea::new();
     window.add(&area);
@@ -338,6 +421,8 @@ fn build_ui(application: &gtk::Application) {
         surface_size: (0, 0),
         surface: None,
         selection: None,
+        drawing_area: area.clone(),
+        command_sender,
     }));
 
     let app_weak = Rc::downgrade(&app);
@@ -378,6 +463,19 @@ fn build_ui(application: &gtk::Application) {
         }
         Inhibit(false)
     });
+
+    let app_weak = Rc::downgrade(&app);
+    let main_context = glib::MainContext::default();
+    main_context.spawn_local(
+        surface_receiver
+            .for_each(move |surface| {
+                if let Some(app) = app_weak.upgrade() {
+                    app.borrow_mut().on_render_done(surface);
+                }
+
+                Ok(())
+            }).map(|_| ()),
+    );
 
     let app = RefCell::new(Some(app));
     window.connect_delete_event(move |win, _| {

@@ -4,7 +4,8 @@ version = "0.1.0"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 
 [dependencies]
-glib = "0.6"
+glib = { version = "0.6", features = ["futures"] }
+futures-preview = "0.2"
 gio = "0.5"
 gdk = "0.9"
 gtk = "0.5"
