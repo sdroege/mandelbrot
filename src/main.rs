@@ -53,6 +53,7 @@ struct App {
     surface_size: (usize, usize),
     surface: Option<cairo::ImageSurface>,
     selection: Option<((f64, f64), Option<(f64, f64)>)>,
+    moving: Option<(f64, f64)>,
     drawing_area: gtk::DrawingArea,
     command_sender: std_mpsc::Sender<Command>,
 }
@@ -256,8 +257,6 @@ fn calculate_selection_rectangle(
 
 impl App {
     fn on_draw(&mut self, cr: &cairo::Context) {
-        let surface_size = self.surface_size;
-
         if let Some(ref surface) = self.surface {
             cr.save();
             cr.scale(0.5, 0.5);
@@ -279,7 +278,7 @@ impl App {
                 x2 as f64,
                 y1 as f64,
                 y2 as f64,
-                surface_size,
+                self.surface_size,
             );
 
             cr.save();
@@ -298,8 +297,27 @@ impl App {
     fn on_motion_notify(&mut self, area: &gtk::DrawingArea, ev: &gdk::EventMotion) {
         if ev.get_state().contains(gdk::ModifierType::BUTTON1_MASK) {
             if let Some(ref mut selection) = &mut self.selection {
-                *selection = (selection.0, Some(ev.get_position()));
+                selection.1 = Some(ev.get_position());
                 area.queue_draw();
+            }
+        } else if ev.get_state().contains(gdk::ModifierType::BUTTON3_MASK) {
+            let old_view = self.view;
+            if let Some(ref mut moving) = &mut self.moving {
+                let new_position = ev.get_position();
+                let (move_x, move_y) = (
+                    ((new_position.0 - moving.0) / self.surface_size.0 as f64) * self.view.2,
+                    ((new_position.1 - moving.1) / self.surface_size.1 as f64) * self.view.3,
+                );
+
+                self.view.0 -= move_x;
+                self.view.1 -= move_y;
+
+                *moving = new_position;
+            }
+
+            if old_view != self.view {
+                area.queue_draw();
+                self.trigger_render();
             }
         }
     }
@@ -307,6 +325,8 @@ impl App {
     fn on_button_press(&mut self, _area: &gtk::DrawingArea, ev: &gdk::EventButton) {
         if ev.get_button() == 1 {
             self.selection = Some((ev.get_position(), None));
+        } else if ev.get_button() == 3 {
+            self.moving = Some(ev.get_position());
         }
     }
 
@@ -344,6 +364,8 @@ impl App {
                 area.queue_draw();
                 self.trigger_render();
             }
+        } else if ev.get_button() == 3 {
+            self.moving = None;
         }
     }
 
@@ -407,7 +429,8 @@ fn build_ui(application: &gtk::Application) {
         area.add_events(
             (gdk::EventMask::BUTTON_PRESS_MASK
                 | gdk::EventMask::BUTTON_RELEASE_MASK
-                | gdk::EventMask::BUTTON1_MOTION_MASK)
+                | gdk::EventMask::BUTTON1_MOTION_MASK
+                | gdk::EventMask::BUTTON3_MOTION_MASK)
                 .to_glib() as i32,
         );
     }
@@ -421,6 +444,7 @@ fn build_ui(application: &gtk::Application) {
         surface_size: (0, 0),
         surface: None,
         selection: None,
+        moving: None,
         drawing_area: area.clone(),
         command_sender,
     }));
