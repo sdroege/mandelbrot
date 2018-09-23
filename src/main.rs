@@ -327,8 +327,12 @@ impl App {
     fn on_button_press(&mut self, _area: &gtk::DrawingArea, ev: &gdk::EventButton) {
         if ev.get_button() == 1 {
             self.selection = Some((ev.get_position(), None));
+            self.moving = None;
+            self.drawing_area.queue_draw();
         } else if ev.get_button() == 3 {
+            self.selection = None;
             self.moving = Some(ev.get_position());
+            self.drawing_area.queue_draw();
         }
     }
 
@@ -368,6 +372,13 @@ impl App {
             }
         } else if ev.get_button() == 3 {
             self.moving = None;
+        }
+    }
+
+    fn on_key_press(&mut self, ev: &gdk::EventKey) {
+        if ev.get_keyval() == gdk::enums::key::Escape {
+            self.selection = None;
+            self.drawing_area.queue_draw();
         }
     }
 
@@ -486,6 +497,14 @@ fn build_ui(application: &gtk::Application) {
     area.connect_draw(move |_, cr| {
         if let Some(app) = app_weak.upgrade() {
             app.borrow_mut().on_draw(cr);
+        }
+        Inhibit(false)
+    });
+
+    let app_weak = Rc::downgrade(&app);
+    window.connect_key_press_event(move |_, ev| {
+        if let Some(app) = app_weak.upgrade() {
+            app.borrow_mut().on_key_press(ev);
         }
         Inhibit(false)
     });
