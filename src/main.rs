@@ -64,7 +64,7 @@ lazy_static! {
 
         let s = 1.0;
         let v = 1.0;
-        for h in 0..360 {
+        for (h, color) in colors.iter_mut().enumerate() {
             let c = v * s;
             let x = c * (1.0 - (((h as f64) / 60.0) % 2.0 - 1.0).abs());
             let m = v - c;
@@ -83,7 +83,7 @@ lazy_static! {
                 (c, 0.0, x)
             };
 
-            colors[h] = Pixel::new(
+            *color = Pixel::new(
                 ((r + m) * 255.0) as u8,
                 ((g + m) * 255.0) as u8,
                 ((b + m) * 255.0) as u8,
@@ -99,7 +99,7 @@ impl Pixel {
         Pixel { x: 0, r, g, b }
     }
 
-    fn interpolate(&self, other: &Self, frac: f64) -> Self {
+    fn interpolate(self, other: Self, frac: f64) -> Self {
         Pixel::new(
             (self.r as f64 + (frac * (other.r as f64 - self.r as f64)))
                 .max(0.0)
@@ -163,7 +163,7 @@ fn create_image(
                 let it = it as f64 + 1.0 - nu;
                 let c1 = COLORS[it.floor() as usize % 360];
                 let c2 = COLORS[(it.floor() + 1.0) as usize % 360];
-                c1.interpolate(&c2, it.fract())
+                c1.interpolate(c2, it.fract())
             } else {
                 Pixel::default()
             }
@@ -172,15 +172,13 @@ fn create_image(
     assert_eq!(pixels.len(), target_width * target_height);
     let pixels = pixels_to_bytes(pixels);
 
-    let surface = cairo::ImageSurface::create_for_data(
+    cairo::ImageSurface::create_for_data(
         pixels,
         cairo::Format::Rgb24,
         target_width as i32,
         target_height as i32,
         (target_width as i32) * 4,
-    ).unwrap();
-
-    surface
+    ).unwrap()
 }
 
 #[derive(Debug)]
@@ -197,8 +195,8 @@ enum Command {
 }
 
 fn render_thread(
-    commands: std_mpsc::Receiver<Command>,
-    surfaces: futures_mpsc::UnboundedSender<cairo::ImageSurface>,
+    commands: &std_mpsc::Receiver<Command>,
+    surfaces: &futures_mpsc::UnboundedSender<cairo::ImageSurface>,
 ) {
     loop {
         let mut command = commands.recv().unwrap();
@@ -416,7 +414,7 @@ fn build_ui(application: &gtk::Application) {
     let (surface_sender, surface_receiver) = futures_mpsc::unbounded();
 
     thread::spawn(move || {
-        render_thread(command_receiver, surface_sender);
+        render_thread(&command_receiver, &surface_sender);
     });
 
     let window = gtk::ApplicationWindow::new(application);
@@ -440,7 +438,7 @@ fn build_ui(application: &gtk::Application) {
 
     let view = (-2.5, -1.0, 3.5, 2.0);
     let app = Rc::new(RefCell::new(App {
-        view: view,
+        view,
         surface_size: (0, 0),
         surface: None,
         selection: None,
