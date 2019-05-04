@@ -3,6 +3,7 @@ name = "mandelbrot"
 version = "0.1.0"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 edition = "2018"
+license = "GPL-3.0"
 
 [dependencies]
 glib = "0.7"
