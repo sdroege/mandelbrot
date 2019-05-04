@@ -1,32 +1,13 @@
-extern crate glib;
-use glib::prelude::*;
-
-extern crate gio;
 use gio::prelude::*;
-
-extern crate gdk;
-use gdk::prelude::*;
-
-extern crate gtk;
 use gtk::prelude::*;
 
-extern crate cairo;
-use cairo::prelude::*;
+use lazy_static::lazy_static;
 
-#[macro_use]
-extern crate lazy_static;
-
-extern crate num_complex;
 use num_complex::Complex64;
 
-extern crate rayon;
 use rayon::prelude::*;
 
-extern crate futures;
-use futures::channel::mpsc as futures_mpsc;
-use futures::prelude::*;
-
-use std::sync::mpsc as std_mpsc;
+use std::sync::mpsc;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -51,6 +32,15 @@ struct Pixel {
     r: u8,
     x: u8,
 }
+
+#[derive(Debug)]
+struct Image {
+    pixels: Vec<u8>,
+    width: usize,
+    height: usize,
+}
+
+#[derive(Debug)]
 struct App {
     view: (f64, f64, f64, f64),
     surface_size: (usize, usize),
@@ -58,7 +48,7 @@ struct App {
     selection: Option<((f64, f64), Option<(f64, f64)>)>,
     moving: Option<(f64, f64)>,
     drawing_area: gtk::DrawingArea,
-    command_sender: std_mpsc::Sender<Command>,
+    command_sender: mpsc::Sender<Command>,
 }
 
 lazy_static! {
@@ -141,7 +131,7 @@ fn create_image(
     height: f64,
     target_width: usize,
     target_height: usize,
-) -> cairo::ImageSurface {
+) -> Image {
     let pixels = (0..target_height)
         .into_par_iter()
         .flat_map(|target_y| rayon::iter::repeatn(target_y, target_width).enumerate())
@@ -171,18 +161,17 @@ fn create_image(
             } else {
                 Pixel::default()
             }
-        }).collect::<Vec<_>>();
+        })
+        .collect::<Vec<_>>();
 
     assert_eq!(pixels.len(), target_width * target_height);
     let pixels = pixels_to_bytes(pixels);
 
-    cairo::ImageSurface::create_for_data(
+    Image {
         pixels,
-        cairo::Format::Rgb24,
-        target_width as i32,
-        target_height as i32,
-        (target_width as i32) * 4,
-    ).unwrap()
+        width: target_width,
+        height: target_height,
+    }
 }
 
 #[derive(Debug)]
@@ -198,10 +187,7 @@ enum Command {
     Quit,
 }
 
-fn render_thread(
-    commands: &std_mpsc::Receiver<Command>,
-    surfaces: &futures_mpsc::UnboundedSender<cairo::ImageSurface>,
-) {
+fn render_thread(commands: &mpsc::Receiver<Command>, surfaces: &glib::Sender<Image>) {
     loop {
         let mut command = commands.recv().unwrap();
 
@@ -224,7 +210,7 @@ fn render_thread(
                 target_height,
             } => {
                 let surface = create_image(x, y, width, height, target_width, target_height);
-                surfaces.unbounded_send(surface).unwrap();
+                surfaces.send(surface).unwrap();
             }
         }
     }
@@ -412,7 +398,8 @@ impl App {
                 height: self.view.3,
                 target_width: self.surface_size.0 * 2,
                 target_height: self.surface_size.1 * 2,
-            }).unwrap();
+            })
+            .unwrap();
     }
 }
 
@@ -425,8 +412,8 @@ impl Drop for App {
 fn build_ui(application: &gtk::Application) {
     use std::thread;
 
-    let (command_sender, command_receiver) = std_mpsc::channel();
-    let (surface_sender, surface_receiver) = futures_mpsc::unbounded();
+    let (command_sender, command_receiver) = mpsc::channel();
+    let (surface_sender, surface_receiver) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
 
     thread::spawn(move || {
         render_thread(&command_receiver, &surface_sender);
@@ -436,17 +423,12 @@ fn build_ui(application: &gtk::Application) {
     let area = gtk::DrawingArea::new();
     window.add(&area);
 
-    {
-        // See https://github.com/gtk-rs/gtk/issues/704
-        use glib::translate::*;
-        area.add_events(
-            (gdk::EventMask::BUTTON_PRESS_MASK
-                | gdk::EventMask::BUTTON_RELEASE_MASK
-                | gdk::EventMask::BUTTON1_MOTION_MASK
-                | gdk::EventMask::BUTTON3_MOTION_MASK)
-                .to_glib() as i32,
-        );
-    }
+    area.add_events(
+        gdk::EventMask::BUTTON_PRESS_MASK
+            | gdk::EventMask::BUTTON_RELEASE_MASK
+            | gdk::EventMask::BUTTON1_MOTION_MASK
+            | gdk::EventMask::BUTTON3_MOTION_MASK,
+    );
 
     window.set_default_size(800, (800.0 / 1.75) as i32);
     window.set_title("Mandelbrot");
@@ -511,16 +493,21 @@ fn build_ui(application: &gtk::Application) {
 
     let app_weak = Rc::downgrade(&app);
     let main_context = glib::MainContext::default();
-    main_context.spawn_local(
-        surface_receiver
-            .for_each(move |surface| {
-                if let Some(app) = app_weak.upgrade() {
-                    app.borrow_mut().on_render_done(surface);
-                }
+    surface_receiver.attach(Some(&main_context), move |image| {
+        if let Some(app) = app_weak.upgrade() {
+            let surface = cairo::ImageSurface::create_for_data(
+                image.pixels,
+                cairo::Format::Rgb24,
+                image.width as i32,
+                image.height as i32,
+                image.width as i32 * 4,
+            )
+            .unwrap();
+            app.borrow_mut().on_render_done(surface);
+        }
 
-                Ok(())
-            }).map(|_| ()),
-    );
+        glib::Continue(true)
+    });
 
     let app = RefCell::new(Some(app));
     window.connect_delete_event(move |win, _| {

@@ -2,14 +2,14 @@
 name = "mandelbrot"
 version = "0.1.0"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
+edition = "2018"
 
 [dependencies]
-glib = { version = "0.6", features = ["futures"] }
-futures-preview = "0.2"
-gio = "0.5"
-gdk = "0.9"
-gtk = "0.5"
-cairo-rs = "0.5"
+glib = "0.7"
+gio = "0.6"
+gdk = "0.10"
+gtk = "0.6"
+cairo-rs = "0.6"
 lazy_static = "1.0"
 num-complex = "0.2"
 rayon = "1.0"
