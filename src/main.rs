@@ -520,9 +520,11 @@ fn build_ui(application: &gtk::Application) {
 }
 
 fn main() {
-    let application =
-        gtk::Application::new("net.coaxion.mandelbrot", gio::ApplicationFlags::empty())
-            .expect("Initialization failed...");
+    let application = gtk::Application::new(
+        Some("net.coaxion.mandelbrot"),
+        gio::ApplicationFlags::empty(),
+    )
+    .expect("Initialization failed...");
 
     application.connect_startup(|app| {
         build_ui(app);
