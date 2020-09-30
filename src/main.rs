@@ -362,7 +362,7 @@ impl App {
     }
 
     fn on_key_press(&mut self, ev: &gdk::EventKey) {
-        if ev.get_keyval() == gdk::enums::key::Escape {
+        if ev.get_keyval() == gdk::keys::constants::Escape {
             self.selection = None;
             self.drawing_area.queue_draw();
         }
@@ -512,7 +512,7 @@ fn build_ui(application: &gtk::Application) {
     let app = RefCell::new(Some(app));
     window.connect_delete_event(move |win, _| {
         let _ = app.borrow_mut().take();
-        win.destroy();
+        win.close();
         Inhibit(false)
     });
 
