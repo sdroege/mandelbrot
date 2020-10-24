@@ -6,11 +6,12 @@ edition = "2018"
 license = "GPL-3.0"
 
 [dependencies]
-glib = "0.10"
-gio = "0.9"
-gdk = "0.13"
-gtk = "0.9"
-cairo-rs = "0.9"
+glib = { git = "https://github.com/gtk-rs/glib.git" }
+gio = { git = "https://github.com/gtk-rs/gio.git" }
+gdk4 = { git = "https://github.com/gtk-rs/gdk4.git" }
+gdk4-sys = { git = "https://github.com/gtk-rs/sys.git" }
+gtk4 = { git = "https://github.com/gtk-rs/gtk4.git" }
+cairo-rs = { git = "https://github.com/gtk-rs/cairo.git" }
 lazy_static = "1.0"
 num-complex = "0.3"
 rayon = "1.0"
