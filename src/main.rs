@@ -1,5 +1,6 @@
 use gio::prelude::*;
-use gtk::prelude::*;
+use glib::signal::Inhibit;
+use gtk4::prelude::*;
 
 use lazy_static::lazy_static;
 
@@ -9,10 +10,8 @@ use rayon::prelude::*;
 
 use std::sync::mpsc;
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-
-use std::env;
 
 #[cfg(target_endian = "big")]
 #[repr(packed)]
@@ -40,14 +39,23 @@ struct Image {
     height: usize,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+struct Rectangle {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+}
+
 #[derive(Debug)]
 struct App {
-    view: (f64, f64, f64, f64),
-    surface_size: (usize, usize),
-    surface: Option<cairo::ImageSurface>,
-    selection: Option<((f64, f64), Option<(f64, f64)>)>,
-    moving: Option<(f64, f64)>,
-    drawing_area: gtk::DrawingArea,
+    view: Cell<Rectangle>,
+    surface_size: Cell<(usize, usize)>,
+    surface: RefCell<Option<cairo::ImageSurface>>,
+    zoom_controller: gtk4::GestureDrag,
+    zoom_controller_cancelled: Cell<bool>,
+    move_controller: gtk4::GestureDrag,
+    drawing_area: gtk4::DrawingArea,
     command_sender: mpsc::Sender<Command>,
 }
 
@@ -107,38 +115,34 @@ impl Pixel {
     }
 }
 
-fn pixels_to_bytes(mut pixels: Vec<Pixel>) -> Vec<u8> {
+fn pixels_to_bytes(pixels: Vec<Pixel>) -> Vec<u8> {
     unsafe {
         use std::mem;
 
         assert_eq!(4 * mem::size_of::<u8>(), mem::size_of::<Pixel>());
 
-        let new_pixels = Vec::from_raw_parts(
+        let mut pixels = mem::ManuallyDrop::new(pixels);
+        Vec::from_raw_parts(
             pixels.as_mut_ptr() as *mut u8,
             pixels.len() * 4,
             pixels.capacity() * 4,
-        );
-        mem::forget(pixels);
-
-        new_pixels
+        )
     }
 }
 
-fn create_image(
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
-    target_width: usize,
-    target_height: usize,
-) -> Image {
+fn create_image(rect: Rectangle, target_width: usize, target_height: usize) -> Image {
+    let (xscale, yscale) = (
+        rect.width / (target_width as f64 - 1.0),
+        rect.height / (target_height as f64 - 1.0),
+    );
+
     let pixels = (0..target_height)
         .into_par_iter()
         .flat_map(|target_y| rayon::iter::repeatn(target_y, target_width).enumerate())
         .map(|(target_x, target_y)| {
             let c = Complex64::new(
-                x + (target_x as f64 / (target_width as f64 - 1.0)) * width,
-                y + (target_y as f64 / (target_height as f64 - 1.0)) * height,
+                rect.x + target_x as f64 * xscale,
+                rect.y + target_y as f64 * yscale,
             );
 
             let mut z = Complex64::new(0.0, 0.0);
@@ -177,10 +181,7 @@ fn create_image(
 #[derive(Debug)]
 enum Command {
     Render {
-        x: f64,
-        y: f64,
-        width: f64,
-        height: f64,
+        rect: Rectangle,
         target_width: usize,
         target_height: usize,
     },
@@ -202,202 +203,216 @@ fn render_thread(commands: &mpsc::Receiver<Command>, surfaces: &glib::Sender<Ima
         match command {
             Command::Quit => break,
             Command::Render {
-                x,
-                y,
-                width,
-                height,
+                rect,
                 target_width,
                 target_height,
             } => {
-                let surface = create_image(x, y, width, height, target_width, target_height);
+                let surface = create_image(rect, target_width, target_height);
                 surfaces.send(surface).unwrap();
             }
         }
     }
 }
 
-fn calculate_selection_rectangle(
-    x1: f64,
-    x2: f64,
-    y1: f64,
-    y2: f64,
-    surface_size: (usize, usize),
-) -> (f64, f64, f64, f64) {
-    let (width, height) = ((x2 - x1), (y2 - y1));
+fn calculate_selection_rectangle(rect: Rectangle, surface_size: (usize, usize)) -> Rectangle {
     let (xscale, yscale) = (
-        (width / surface_size.0 as f64).abs(),
-        (height / surface_size.1 as f64).abs(),
+        (rect.width / surface_size.0 as f64).abs(),
+        (rect.height / surface_size.1 as f64).abs(),
     );
+
     let (width, height) = if xscale > yscale {
         (
-            width,
-            height.signum() * (width as f64 * surface_size.1 as f64 / surface_size.0 as f64).abs(),
+            rect.width,
+            rect.height.signum()
+                * (rect.width as f64 * surface_size.1 as f64 / surface_size.0 as f64).abs(),
         )
     } else {
         (
-            width.signum() * (height as f64 * surface_size.0 as f64 / surface_size.1 as f64).abs(),
-            height,
+            rect.width.signum()
+                * (rect.height as f64 * surface_size.0 as f64 / surface_size.1 as f64).abs(),
+            rect.height,
         )
     };
 
-    (x1, y1, width, height)
+    Rectangle {
+        width,
+        height,
+        ..rect
+    }
 }
 
 impl App {
-    fn on_draw(&mut self, cr: &cairo::Context) {
-        if let Some(ref surface) = self.surface {
-            cr.save();
+    fn on_draw(&self, cr: &cairo::Context) {
+        if let Some(ref surface) = *self.surface.borrow() {
+            cr.save().expect("Failed to save cairo state");
             cr.scale(0.5, 0.5);
             cr.set_operator(cairo::Operator::Source);
-            cr.set_source_surface(surface, 0.0, 0.0);
-            cr.paint();
-            cr.restore();
+            cr.set_source_surface(surface, 0.0, 0.0)
+                .expect("Failed to set source surface");
+            cr.paint().expect("Failed to paint");
+            cr.restore().expect("Failed to restore cairo state");
         } else {
-            cr.save();
+            cr.save().expect("Failed to save cairo state");
             cr.set_operator(cairo::Operator::Clear);
             cr.set_source_rgb(0.0, 0.0, 0.0);
-            cr.paint();
-            cr.restore();
+            cr.paint().expect("Failed to paint");
+            cr.restore().expect("Failed to restore cairo state");
         }
 
-        if let Some(((x1, y1), Some((x2, y2)))) = self.selection {
-            let (x, y, width, height) = calculate_selection_rectangle(
-                x1 as f64,
-                x2 as f64,
-                y1 as f64,
-                y2 as f64,
-                self.surface_size,
+        if self.zoom_controller.is_recognized() {
+            if let (Some((x, y)), Some((width, height))) = (
+                self.zoom_controller.start_point(),
+                self.zoom_controller.offset(),
+            ) {
+                let rect = Rectangle {
+                    x,
+                    y,
+                    width,
+                    height,
+                };
+                let rect = calculate_selection_rectangle(rect, self.surface_size.get());
+
+                cr.save().expect("Failed to save cairo state");
+                cr.set_line_width(1.0);
+                cr.rectangle(rect.x, rect.y, rect.width, rect.height);
+                cr.set_source_rgb(1.0, 1.0, 1.0);
+                cr.stroke().expect("Failed to stroke");
+
+                cr.rectangle(rect.x, rect.y, rect.width, rect.height);
+                cr.set_source_rgba(1.0, 1.0, 1.0, 0.2);
+                cr.fill().expect("Failed to fill");
+                cr.restore().expect("Failed to restore cairo state");
+            }
+        }
+    }
+
+    fn on_zoom_begin(&self, _controller: &gtk4::GestureDrag, _x: f64, _y: f64) {
+        self.zoom_controller_cancelled.set(false);
+        self.move_controller.reset();
+    }
+
+    fn on_zoom_update(&self, _controller: &gtk4::GestureDrag, _off_x: f64, _off_y: f64) {
+        self.drawing_area.queue_draw();
+    }
+
+    fn on_zoom_end(&self, _controller: &gtk4::GestureDrag, _off_x: f64, _off_y: f64) {
+        if self.zoom_controller_cancelled.get() {
+            return;
+        }
+
+        if let (Some((x, y)), Some((width, height))) = (
+            self.zoom_controller.start_point(),
+            self.zoom_controller.offset(),
+        ) {
+            let rect = Rectangle {
+                x,
+                y,
+                width,
+                height,
+            };
+
+            let rect = calculate_selection_rectangle(rect, self.surface_size.get());
+
+            let (x1, x2, y1, y2) = (
+                f64::min(rect.x, rect.x + rect.width),
+                f64::max(rect.x, rect.x + rect.width),
+                f64::min(rect.y, rect.y + rect.height),
+                f64::max(rect.y, rect.y + rect.height),
             );
 
-            cr.save();
-            cr.set_line_width(1.0);
-            cr.rectangle(x, y, width, height);
-            cr.set_source_rgb(1.0, 1.0, 1.0);
-            cr.stroke();
+            let view = self.view.get();
+            let surface_size = self.surface_size.get();
+            let (xscale, yscale) = (
+                view.width / surface_size.0 as f64,
+                view.height / surface_size.1 as f64,
+            );
 
-            cr.rectangle(x, y, width, height);
-            cr.set_source_rgba(1.0, 1.0, 1.0, 0.2);
-            cr.fill();
-            cr.restore();
+            self.view.set(Rectangle {
+                x: view.x + x1 * xscale,
+                y: view.y + y1 * yscale,
+                width: (x2 - x1) * xscale,
+                height: (y2 - y1) * yscale,
+            });
+
+            let _ = self.surface.borrow_mut().take();
+            self.trigger_render();
         }
+
+        self.drawing_area.queue_draw();
     }
 
-    fn on_motion_notify(&mut self, area: &gtk::DrawingArea, ev: &gdk::EventMotion) {
-        if ev.get_state().contains(gdk::ModifierType::BUTTON1_MASK) {
-            if let Some(ref mut selection) = &mut self.selection {
-                selection.1 = Some(ev.get_position());
-                area.queue_draw();
-            }
-        } else if ev.get_state().contains(gdk::ModifierType::BUTTON3_MASK) {
-            let old_view = self.view;
-            if let Some(ref mut moving) = &mut self.moving {
-                let new_position = ev.get_position();
-                let (move_x, move_y) = (
-                    ((new_position.0 - moving.0) / self.surface_size.0 as f64) * self.view.2,
-                    ((new_position.1 - moving.1) / self.surface_size.1 as f64) * self.view.3,
-                );
-
-                self.view.0 -= move_x;
-                self.view.1 -= move_y;
-
-                *moving = new_position;
-            }
-
-            if old_view != self.view {
-                area.queue_draw();
-                self.trigger_render();
-            }
-        }
+    fn on_zoom_cancelled(&self, _controller: &gtk4::GestureDrag) {
+        self.zoom_controller_cancelled.set(true);
     }
 
-    fn on_button_press(&mut self, _area: &gtk::DrawingArea, ev: &gdk::EventButton) {
-        if ev.get_button() == 1 {
-            self.selection = Some((ev.get_position(), None));
-            self.moving = None;
+    fn on_move_begin(&self, _controller: &gtk4::GestureDrag, _x: f64, _y: f64) {
+        self.zoom_controller.reset();
+    }
+
+    fn on_move_update(&self, _controller: &gtk4::GestureDrag, _off_x: f64, _off_y: f64) {
+        self.drawing_area.queue_draw();
+        self.trigger_render();
+    }
+
+    fn on_move_end(&self, _controller: &gtk4::GestureDrag, _off_x: f64, _off_y: f64) {
+        if let Some((x, y)) = self.move_controller.offset() {
+            let mut view = self.view.get();
+            let surface_size = self.surface_size.get();
+            view.x -= x / surface_size.0 as f64 * view.width;
+            view.y -= y / surface_size.1 as f64 * view.height;
+            self.view.set(view);
+
             self.drawing_area.queue_draw();
-        } else if ev.get_button() == 3 {
-            self.selection = None;
-            self.moving = Some(ev.get_position());
-            self.drawing_area.queue_draw();
+            self.trigger_render();
         }
     }
 
-    fn on_button_release(&mut self, area: &gtk::DrawingArea, ev: &gdk::EventButton) {
-        if ev.get_button() == 1 {
-            let selection = self.selection.take();
-
-            if let Some(((x1, y1), Some((x2, y2)))) = selection {
-                let surface_size = self.surface_size;
-
-                let (x, y, width, height) = calculate_selection_rectangle(
-                    x1 as f64,
-                    x2 as f64,
-                    y1 as f64,
-                    y2 as f64,
-                    surface_size,
-                );
-
-                let (x1, x2, y1, y2) = (
-                    x.min(x + width),
-                    x.max(x + width),
-                    y.min(y + height),
-                    y.max(y + height),
-                );
-
-                let old_view = self.view;
-                let view_x1 = old_view.0 + (x1 / surface_size.0 as f64) * old_view.2;
-                let view_y1 = old_view.1 + (y1 / surface_size.1 as f64) * old_view.3;
-                let view_x2 = old_view.0 + (x2 / surface_size.0 as f64) * old_view.2;
-                let view_y2 = old_view.1 + (y2 / surface_size.1 as f64) * old_view.3;
-
-                self.view = (view_x1, view_y1, view_x2 - view_x1, view_y2 - view_y1);
-
-                let _ = self.surface.take();
-                area.queue_draw();
-                self.trigger_render();
-            }
-        } else if ev.get_button() == 3 {
-            self.moving = None;
-        }
-    }
-
-    fn on_key_press(&mut self, ev: &gdk::EventKey) {
-        if ev.get_keyval() == gdk::keys::constants::Escape {
-            self.selection = None;
+    fn on_key_pressed(&self, keyval: gdk4::keys::Key, _keycode: u32, _state: gdk4::ModifierType) {
+        if keyval == gdk4::keys::constants::Escape {
+            self.zoom_controller.reset();
             self.drawing_area.queue_draw();
         }
     }
 
-    fn on_size_allocate(&mut self, area: &gtk::DrawingArea, allocation: &gdk::Rectangle) {
-        let old_size = self.surface_size;
-        let new_size = (allocation.width as usize, allocation.height as usize);
+    fn on_resize(&self, area: &gtk4::DrawingArea, width: i32, height: i32) {
+        let old_size = self.surface_size.get();
+        let new_size = (width as usize, height as usize);
         if new_size != old_size {
             if old_size.0 != 0 && old_size.1 != 0 && new_size.0 != 0 && new_size.1 != 0 {
-                self.view.2 = self.view.2 * new_size.0 as f64 / old_size.0 as f64;
-                self.view.3 = self.view.3 * new_size.1 as f64 / old_size.1 as f64;
+                let mut view = self.view.get();
+                view.width *= new_size.0 as f64 / old_size.0 as f64;
+                view.height *= new_size.1 as f64 / old_size.1 as f64;
+                self.view.set(view);
             }
 
-            self.surface_size = new_size;
-            let _ = self.surface.take();
+            self.surface_size.set(new_size);
             area.queue_draw();
             self.trigger_render();
         }
     }
 
-    fn on_render_done(&mut self, surface: cairo::ImageSurface) {
-        self.surface = Some(surface);
+    fn on_render_done(&self, surface: cairo::ImageSurface) {
+        *self.surface.borrow_mut() = Some(surface);
         self.drawing_area.queue_draw();
     }
 
     fn trigger_render(&self) {
+        let mut rect = self.view.get();
+        let surface_size = self.surface_size.get();
+
+        if self.move_controller.is_recognized() {
+            if let Some((x, y)) = self.move_controller.offset() {
+                let view = self.view.get();
+                rect.x -= x / surface_size.0 as f64 * view.width;
+                rect.y -= y / surface_size.1 as f64 * view.height;
+            }
+        }
+
         self.command_sender
             .send(Command::Render {
-                x: self.view.0,
-                y: self.view.1,
-                width: self.view.2,
-                height: self.view.3,
-                target_width: self.surface_size.0 * 2,
-                target_height: self.surface_size.1 * 2,
+                rect,
+                target_width: surface_size.0 * 2,
+                target_height: surface_size.1 * 2,
             })
             .unwrap();
     }
@@ -409,7 +424,7 @@ impl Drop for App {
     }
 }
 
-fn build_ui(application: &gtk::Application) {
+fn build_ui(application: &gtk4::Application) {
     use std::thread;
 
     let (command_sender, command_receiver) = mpsc::channel();
@@ -419,74 +434,107 @@ fn build_ui(application: &gtk::Application) {
         render_thread(&command_receiver, &surface_sender);
     });
 
-    let window = gtk::ApplicationWindow::new(application);
-    let area = gtk::DrawingArea::new();
-    window.add(&area);
-
-    area.add_events(
-        gdk::EventMask::BUTTON_PRESS_MASK
-            | gdk::EventMask::BUTTON_RELEASE_MASK
-            | gdk::EventMask::BUTTON1_MOTION_MASK
-            | gdk::EventMask::BUTTON3_MOTION_MASK,
-    );
+    let window = gtk4::ApplicationWindow::new(application);
+    let area = gtk4::DrawingArea::new();
+    window.set_child(Some(&area));
 
     window.set_default_size(800, (800.0 / 1.75) as i32);
-    window.set_title("Mandelbrot");
+    window.set_title(Some("Mandelbrot"));
 
-    let view = (-2.5, -1.0, 3.5, 2.0);
-    let app = Rc::new(RefCell::new(App {
-        view,
-        surface_size: (0, 0),
-        surface: None,
-        selection: None,
-        moving: None,
+    let view = Rectangle {
+        x: -2.5,
+        y: -1.0,
+        width: 3.5,
+        height: 2.0,
+    };
+
+    let zoom_controller = gtk4::GestureDrag::new();
+    zoom_controller.set_button(1);
+    let move_controller = gtk4::GestureDrag::new();
+    move_controller.set_button(3);
+
+    let app = Rc::new(App {
+        view: Cell::new(view),
+        surface_size: Cell::new((0, 0)),
+        surface: RefCell::new(None),
+        zoom_controller: zoom_controller.clone(),
+        zoom_controller_cancelled: Cell::new(false),
+        move_controller: move_controller.clone(),
         drawing_area: area.clone(),
         command_sender,
-    }));
+    });
 
     let app_weak = Rc::downgrade(&app);
-    area.connect_size_allocate(move |area, allocation| {
+    area.connect_resize(move |area, width, height| {
         if let Some(app) = app_weak.upgrade() {
-            app.borrow_mut().on_size_allocate(area, allocation);
+            app.on_resize(area, width, height);
+        }
+    });
+
+    area.add_controller(&zoom_controller);
+    let app_weak = Rc::downgrade(&app);
+    zoom_controller.connect_drag_begin(move |controller, x, y| {
+        if let Some(app) = app_weak.upgrade() {
+            app.on_zoom_begin(controller, x, y);
         }
     });
 
     let app_weak = Rc::downgrade(&app);
-    area.connect_button_press_event(move |area, ev| {
+    zoom_controller.connect_drag_update(move |controller, off_x, off_y| {
         if let Some(app) = app_weak.upgrade() {
-            app.borrow_mut().on_button_press(area, ev);
+            app.on_zoom_update(controller, off_x, off_y);
         }
-        Inhibit(false)
     });
 
     let app_weak = Rc::downgrade(&app);
-    area.connect_button_release_event(move |area, ev| {
+    zoom_controller.connect_cancel(move |controller, _sequence| {
         if let Some(app) = app_weak.upgrade() {
-            app.borrow_mut().on_button_release(area, ev);
+            app.on_zoom_cancelled(controller);
         }
-        Inhibit(false)
     });
 
     let app_weak = Rc::downgrade(&app);
-    area.connect_motion_notify_event(move |area, ev| {
+    zoom_controller.connect_drag_end(move |controller, off_x, off_y| {
         if let Some(app) = app_weak.upgrade() {
-            app.borrow_mut().on_motion_notify(area, ev);
+            app.on_zoom_end(controller, off_x, off_y);
         }
-        Inhibit(false)
+    });
+
+    area.add_controller(&move_controller);
+    let app_weak = Rc::downgrade(&app);
+    move_controller.connect_drag_begin(move |controller, x, y| {
+        if let Some(app) = app_weak.upgrade() {
+            app.on_move_begin(controller, x, y);
+        }
     });
 
     let app_weak = Rc::downgrade(&app);
-    area.connect_draw(move |_, cr| {
+    move_controller.connect_drag_update(move |controller, off_x, off_y| {
         if let Some(app) = app_weak.upgrade() {
-            app.borrow_mut().on_draw(cr);
+            app.on_move_update(controller, off_x, off_y);
         }
-        Inhibit(false)
     });
 
     let app_weak = Rc::downgrade(&app);
-    window.connect_key_press_event(move |_, ev| {
+    move_controller.connect_drag_end(move |controller, off_x, off_y| {
         if let Some(app) = app_weak.upgrade() {
-            app.borrow_mut().on_key_press(ev);
+            app.on_move_end(controller, off_x, off_y);
+        }
+    });
+
+    let app_weak = Rc::downgrade(&app);
+    area.set_draw_func(move |_, cr, _width, _height| {
+        if let Some(app) = app_weak.upgrade() {
+            app.on_draw(cr);
+        }
+    });
+
+    let key_controller = gtk4::EventControllerKey::new();
+    window.add_controller(&key_controller);
+    let app_weak = Rc::downgrade(&app);
+    key_controller.connect_key_pressed(move |_, keyval, keycode, state| {
+        if let Some(app) = app_weak.upgrade() {
+            app.on_key_pressed(keyval, keycode, state);
         }
         Inhibit(false)
     });
@@ -503,32 +551,31 @@ fn build_ui(application: &gtk::Application) {
                 image.width as i32 * 4,
             )
             .unwrap();
-            app.borrow_mut().on_render_done(surface);
+            app.on_render_done(surface);
         }
 
         glib::Continue(true)
     });
 
     let app = RefCell::new(Some(app));
-    window.connect_delete_event(move |win, _| {
+    window.connect_close_request(move |win| {
         let _ = app.borrow_mut().take();
         win.close();
         Inhibit(false)
     });
 
-    window.show_all();
+    window.show();
 }
 
 fn main() {
-    let application = gtk::Application::new(
+    let application = gtk4::Application::new(
         Some("net.coaxion.mandelbrot"),
         gio::ApplicationFlags::empty(),
-    )
-    .expect("Initialization failed...");
+    );
 
     application.connect_startup(|app| {
         build_ui(app);
     });
     application.connect_activate(|_| {});
-    application.run(&env::args().collect::<Vec<_>>());
+    application.run();
 }
