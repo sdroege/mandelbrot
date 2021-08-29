@@ -1,6 +1,6 @@
 use gio::prelude::*;
 use glib::signal::Inhibit;
-use gtk4::prelude::*;
+use gtk::prelude::*;
 
 use lazy_static::lazy_static;
 
@@ -52,10 +52,10 @@ struct App {
     view: Cell<Rectangle>,
     surface_size: Cell<(usize, usize)>,
     surface: RefCell<Option<cairo::ImageSurface>>,
-    zoom_controller: gtk4::GestureDrag,
+    zoom_controller: gtk::GestureDrag,
     zoom_controller_cancelled: Cell<bool>,
-    move_controller: gtk4::GestureDrag,
-    drawing_area: gtk4::DrawingArea,
+    move_controller: gtk::GestureDrag,
+    drawing_area: gtk::DrawingArea,
     command_sender: mpsc::Sender<Command>,
 }
 
@@ -286,16 +286,16 @@ impl App {
         }
     }
 
-    fn on_zoom_begin(&self, _controller: &gtk4::GestureDrag, _x: f64, _y: f64) {
+    fn on_zoom_begin(&self, _controller: &gtk::GestureDrag, _x: f64, _y: f64) {
         self.zoom_controller_cancelled.set(false);
         self.move_controller.reset();
     }
 
-    fn on_zoom_update(&self, _controller: &gtk4::GestureDrag, _off_x: f64, _off_y: f64) {
+    fn on_zoom_update(&self, _controller: &gtk::GestureDrag, _off_x: f64, _off_y: f64) {
         self.drawing_area.queue_draw();
     }
 
-    fn on_zoom_end(&self, _controller: &gtk4::GestureDrag, _off_x: f64, _off_y: f64) {
+    fn on_zoom_end(&self, _controller: &gtk::GestureDrag, _off_x: f64, _off_y: f64) {
         if self.zoom_controller_cancelled.get() {
             return;
         }
@@ -341,20 +341,20 @@ impl App {
         self.drawing_area.queue_draw();
     }
 
-    fn on_zoom_cancelled(&self, _controller: &gtk4::GestureDrag) {
+    fn on_zoom_cancelled(&self, _controller: &gtk::GestureDrag) {
         self.zoom_controller_cancelled.set(true);
     }
 
-    fn on_move_begin(&self, _controller: &gtk4::GestureDrag, _x: f64, _y: f64) {
+    fn on_move_begin(&self, _controller: &gtk::GestureDrag, _x: f64, _y: f64) {
         self.zoom_controller.reset();
     }
 
-    fn on_move_update(&self, _controller: &gtk4::GestureDrag, _off_x: f64, _off_y: f64) {
+    fn on_move_update(&self, _controller: &gtk::GestureDrag, _off_x: f64, _off_y: f64) {
         self.drawing_area.queue_draw();
         self.trigger_render();
     }
 
-    fn on_move_end(&self, _controller: &gtk4::GestureDrag, _off_x: f64, _off_y: f64) {
+    fn on_move_end(&self, _controller: &gtk::GestureDrag, _off_x: f64, _off_y: f64) {
         if let Some((x, y)) = self.move_controller.offset() {
             let mut view = self.view.get();
             let surface_size = self.surface_size.get();
@@ -367,14 +367,14 @@ impl App {
         }
     }
 
-    fn on_key_pressed(&self, keyval: gdk4::keys::Key, _keycode: u32, _state: gdk4::ModifierType) {
-        if keyval == gdk4::keys::constants::Escape {
+    fn on_key_pressed(&self, keyval: gdk::keys::Key, _keycode: u32, _state: gdk::ModifierType) {
+        if keyval == gdk::keys::constants::Escape {
             self.zoom_controller.reset();
             self.drawing_area.queue_draw();
         }
     }
 
-    fn on_resize(&self, area: &gtk4::DrawingArea, width: i32, height: i32) {
+    fn on_resize(&self, area: &gtk::DrawingArea, width: i32, height: i32) {
         let old_size = self.surface_size.get();
         let new_size = (width as usize, height as usize);
         if new_size != old_size {
@@ -424,7 +424,7 @@ impl Drop for App {
     }
 }
 
-fn build_ui(application: &gtk4::Application) {
+fn build_ui(application: &gtk::Application) {
     use std::thread;
 
     let (command_sender, command_receiver) = mpsc::channel();
@@ -434,8 +434,8 @@ fn build_ui(application: &gtk4::Application) {
         render_thread(&command_receiver, &surface_sender);
     });
 
-    let window = gtk4::ApplicationWindow::new(application);
-    let area = gtk4::DrawingArea::new();
+    let window = gtk::ApplicationWindow::new(application);
+    let area = gtk::DrawingArea::new();
     window.set_child(Some(&area));
 
     window.set_default_size(800, (800.0 / 1.75) as i32);
@@ -448,9 +448,9 @@ fn build_ui(application: &gtk4::Application) {
         height: 2.0,
     };
 
-    let zoom_controller = gtk4::GestureDrag::new();
+    let zoom_controller = gtk::GestureDrag::new();
     zoom_controller.set_button(1);
-    let move_controller = gtk4::GestureDrag::new();
+    let move_controller = gtk::GestureDrag::new();
     move_controller.set_button(3);
 
     let app = Rc::new(App {
@@ -529,7 +529,7 @@ fn build_ui(application: &gtk4::Application) {
         }
     });
 
-    let key_controller = gtk4::EventControllerKey::new();
+    let key_controller = gtk::EventControllerKey::new();
     window.add_controller(&key_controller);
     let app_weak = Rc::downgrade(&app);
     key_controller.connect_key_pressed(move |_, keyval, keycode, state| {
@@ -568,7 +568,7 @@ fn build_ui(application: &gtk4::Application) {
 }
 
 fn main() {
-    let application = gtk4::Application::new(
+    let application = gtk::Application::new(
         Some("net.coaxion.mandelbrot"),
         gio::ApplicationFlags::empty(),
     );
