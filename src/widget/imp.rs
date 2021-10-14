@@ -242,15 +242,6 @@ impl ObjectImpl for Widget {
 }
 
 impl WidgetImpl for Widget {
-    fn measure(
-        &self,
-        _widget: &Self::Type,
-        _orientation: gtk::Orientation,
-        _for_size: i32,
-    ) -> (i32, i32, i32, i32) {
-        (0, 0, -1, -1)
-    }
-
     fn size_allocate(&self, widget: &Self::Type, width: i32, height: i32, _baseline: i32) {
         self.on_resize(widget, width, height);
     }
