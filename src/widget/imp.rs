@@ -265,7 +265,7 @@ impl Widget {
 
             self.surface_size.set(new_size);
             widget.queue_draw();
-            self.trigger_render(&widget);
+            self.trigger_render(widget);
         }
     }
 
