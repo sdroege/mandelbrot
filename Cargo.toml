@@ -11,6 +11,6 @@ gio = { git = "https://github.com/gtk-rs/gtk-rs-core.git "}
 gdk = { package = "gdk4", git = "https://github.com/gtk-rs/gtk4-rs.git" }
 gsk = { package = "gsk4", git = "https://github.com/gtk-rs/gtk4-rs.git" }
 gtk = { package = "gtk4", git = "https://github.com/gtk-rs/gtk4-rs.git" }
-lazy_static = "1.0"
 num-complex = "0.4"
 rayon = "1.0"
+once_cell = "1"

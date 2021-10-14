@@ -6,11 +6,10 @@ use num_complex::Complex64;
 
 use rayon::prelude::*;
 
+use std::cell::{Cell, RefCell};
 use std::sync::mpsc;
 
-use std::cell::{Cell, RefCell};
-
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 #[cfg(target_endian = "big")]
 #[repr(packed)]
@@ -581,41 +580,39 @@ fn calculate_selection_rectangle(rect: Rectangle, surface_size: (usize, usize)) 
     }
 }
 
-lazy_static! {
-    static ref COLORS: [Pixel; 360] = {
-        let mut colors = [Default::default(); 360];
+static COLORS: Lazy<[Pixel; 360]> = Lazy::new(|| {
+    let mut colors = [Default::default(); 360];
 
-        let s = 1.0;
-        let v = 1.0;
-        for (h, color) in colors.iter_mut().enumerate() {
-            let c = v * s;
-            let x = c * (1.0 - (((h as f64) / 60.0) % 2.0 - 1.0).abs());
-            let m = v - c;
+    let s = 1.0;
+    let v = 1.0;
+    for (h, color) in colors.iter_mut().enumerate() {
+        let c = v * s;
+        let x = c * (1.0 - (((h as f64) / 60.0) % 2.0 - 1.0).abs());
+        let m = v - c;
 
-            let (r, g, b) = if h < 60 {
-                (c, x, 0.0)
-            } else if h < 120 {
-                (x, c, 0.0)
-            } else if h < 180 {
-                (0.0, c, x)
-            } else if h < 240 {
-                (0.0, x, c)
-            } else if h < 300 {
-                (x, 0.0, c)
-            } else {
-                (c, 0.0, x)
-            };
+        let (r, g, b) = if h < 60 {
+            (c, x, 0.0)
+        } else if h < 120 {
+            (x, c, 0.0)
+        } else if h < 180 {
+            (0.0, c, x)
+        } else if h < 240 {
+            (0.0, x, c)
+        } else if h < 300 {
+            (x, 0.0, c)
+        } else {
+            (c, 0.0, x)
+        };
 
-            *color = Pixel::new(
-                ((r + m) * 255.0) as u8,
-                ((g + m) * 255.0) as u8,
-                ((b + m) * 255.0) as u8,
-            );
-        }
+        *color = Pixel::new(
+            ((r + m) * 255.0) as u8,
+            ((g + m) * 255.0) as u8,
+            ((b + m) * 255.0) as u8,
+        );
+    }
 
-        colors
-    };
-}
+    colors
+});
 
 impl Pixel {
     fn new(r: u8, g: u8, b: u8) -> Self {
