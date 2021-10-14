@@ -514,15 +514,21 @@ impl Pixel {
 
     fn interpolate(self, other: Self, frac: f64) -> Self {
         Pixel::new(
-            (self.r as f64 + (frac * (other.r as f64 - self.r as f64)))
-                .max(0.0)
-                .min(255.0) as u8,
-            (self.g as f64 + (frac * (other.g as f64 - self.g as f64)))
-                .max(0.0)
-                .min(255.0) as u8,
-            (self.b as f64 + (frac * (other.b as f64 - self.b as f64)))
-                .max(0.0)
-                .min(255.0) as u8,
+            f64::clamp(
+                self.r as f64 + (frac * (other.r as f64 - self.r as f64)),
+                0.0,
+                255.0,
+            ) as u8,
+            f64::clamp(
+                self.g as f64 + (frac * (other.g as f64 - self.g as f64)),
+                0.0,
+                255.0,
+            ) as u8,
+            f64::clamp(
+                self.b as f64 + (frac * (other.b as f64 - self.b as f64)),
+                0.0,
+                255.0,
+            ) as u8,
         )
     }
 }
@@ -555,20 +561,20 @@ fn render_thread(commands: &mpsc::Receiver<Command>, surfaces: &glib::Sender<Ima
 
 fn calculate_selection_rectangle(rect: Rectangle, surface_size: (usize, usize)) -> Rectangle {
     let (xscale, yscale) = (
-        (rect.width / surface_size.0 as f64).abs(),
-        (rect.height / surface_size.1 as f64).abs(),
+        f64::abs(rect.width / surface_size.0 as f64),
+        f64::abs(rect.height / surface_size.1 as f64),
     );
 
     let (width, height) = if xscale > yscale {
         (
             rect.width,
             rect.height.signum()
-                * (rect.width as f64 * surface_size.1 as f64 / surface_size.0 as f64).abs(),
+                * f64::abs(rect.width as f64 * surface_size.1 as f64 / surface_size.0 as f64),
         )
     } else {
         (
             rect.width.signum()
-                * (rect.height as f64 * surface_size.0 as f64 / surface_size.1 as f64).abs(),
+                * f64::abs(rect.height as f64 * surface_size.0 as f64 / surface_size.1 as f64),
             rect.height,
         )
     };
@@ -587,7 +593,7 @@ static COLORS: Lazy<[Pixel; 360]> = Lazy::new(|| {
     let v = 1.0;
     for (h, color) in colors.iter_mut().enumerate() {
         let c = v * s;
-        let x = c * (1.0 - (((h as f64) / 60.0) % 2.0 - 1.0).abs());
+        let x = c * (1.0 - f64::abs(((h as f64) / 60.0) % 2.0 - 1.0));
         let m = v - c;
 
         let (r, g, b) = if h < 60 {
@@ -639,13 +645,13 @@ fn create_image(rect: Rectangle, target_width: usize, target_height: usize) -> I
             }
 
             if (it as usize) < max_it {
-                let log_zn = z.norm_sqr().ln() / 2.0;
-                let nu = (log_zn / 2.0f64.ln()).ln() / 2.0f64.ln();
+                let log_zn = f64::ln(z.norm_sqr()) / 2.0;
+                let nu = f64::ln(log_zn / f64::ln(2.0)) / f64::ln(2.0);
 
                 let it = it as f64 + 1.0 - nu;
                 let c1 = COLORS[it.floor() as usize % 360];
                 let c2 = COLORS[(it.floor() + 1.0) as usize % 360];
-                c1.interpolate(c2, it.fract())
+                Pixel::interpolate(c1, c2, it.fract())
             } else {
                 Pixel::default()
             }
