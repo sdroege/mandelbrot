@@ -140,65 +140,66 @@ impl ObjectImpl for Widget {
 
         widget.add_controller(&self.zoom_controller);
 
-        let widget_weak = widget.downgrade();
         self.zoom_controller
             .connect_drag_begin(move |controller, x, y| {
-                if let Some(widget) = widget_weak.upgrade() {
+                if let Some(widget) = controller.widget() {
+                    let widget = widget.downcast::<super::Widget>().unwrap();
                     let imp = Widget::from_instance(&widget);
                     imp.on_zoom_begin(&widget, controller, x, y);
                 }
             });
 
-        let widget_weak = widget.downgrade();
         self.zoom_controller
             .connect_drag_update(move |controller, off_x, off_y| {
-                if let Some(widget) = widget_weak.upgrade() {
+                if let Some(widget) = controller.widget() {
+                    let widget = widget.downcast::<super::Widget>().unwrap();
                     let imp = Widget::from_instance(&widget);
                     imp.on_zoom_update(&widget, controller, off_x, off_y);
                 }
             });
 
-        let widget_weak = widget.downgrade();
         self.zoom_controller
             .connect_cancel(move |controller, _sequence| {
-                if let Some(widget) = widget_weak.upgrade() {
+                if let Some(widget) = controller.widget() {
+                    let widget = widget.downcast::<super::Widget>().unwrap();
                     let imp = Widget::from_instance(&widget);
                     imp.on_zoom_cancelled(&widget, controller);
                 }
             });
 
-        let widget_weak = widget.downgrade();
         self.zoom_controller
             .connect_drag_end(move |controller, off_x, off_y| {
-                if let Some(widget) = widget_weak.upgrade() {
+                if let Some(widget) = controller.widget() {
+                    let widget = widget.downcast::<super::Widget>().unwrap();
                     let imp = Widget::from_instance(&widget);
                     imp.on_zoom_end(&widget, controller, off_x, off_y);
                 }
             });
 
         widget.add_controller(&self.move_controller);
-        let widget_weak = widget.downgrade();
+
         self.move_controller
             .connect_drag_begin(move |controller, x, y| {
-                if let Some(widget) = widget_weak.upgrade() {
+                if let Some(widget) = controller.widget() {
+                    let widget = widget.downcast::<super::Widget>().unwrap();
                     let imp = Widget::from_instance(&widget);
                     imp.on_move_begin(&widget, controller, x, y);
                 }
             });
 
-        let widget_weak = widget.downgrade();
         self.move_controller
             .connect_drag_update(move |controller, off_x, off_y| {
-                if let Some(widget) = widget_weak.upgrade() {
+                if let Some(widget) = controller.widget() {
+                    let widget = widget.downcast::<super::Widget>().unwrap();
                     let imp = Widget::from_instance(&widget);
                     imp.on_move_update(&widget, controller, off_x, off_y);
                 }
             });
 
-        let widget_weak = widget.downgrade();
         self.move_controller
             .connect_drag_end(move |controller, off_x, off_y| {
-                if let Some(widget) = widget_weak.upgrade() {
+                if let Some(widget) = controller.widget() {
+                    let widget = widget.downcast::<super::Widget>().unwrap();
                     let imp = Widget::from_instance(&widget);
                     imp.on_move_end(&widget, controller, off_x, off_y);
                 }
@@ -206,9 +207,10 @@ impl ObjectImpl for Widget {
 
         let key_controller = gtk::EventControllerKey::new();
         widget.add_controller(&key_controller);
-        let widget_weak = widget.downgrade();
-        key_controller.connect_key_pressed(move |_, keyval, keycode, state| {
-            if let Some(widget) = widget_weak.upgrade() {
+
+        key_controller.connect_key_pressed(move |controller, keyval, keycode, state| {
+            if let Some(widget) = controller.widget() {
+                let widget = widget.downcast::<super::Widget>().unwrap();
                 let imp = Widget::from_instance(&widget);
                 imp.on_key_pressed(&widget, keyval, keycode, state);
             }
