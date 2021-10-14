@@ -1,6 +1,4 @@
-use gio::prelude::*;
-use glib::signal::Inhibit;
-use gtk::prelude::*;
+use gtk::{gio, prelude::*};
 
 mod widget;
 
@@ -16,7 +14,7 @@ fn build_ui(application: &gtk::Application) {
 
     window.connect_close_request(move |win| {
         win.close();
-        Inhibit(false)
+        gtk::Inhibit(false)
     });
 
     window.show();

@@ -1,6 +1,4 @@
-use gtk::graphene;
-use gtk::prelude::*;
-use gtk::subclass::prelude::*;
+use gtk::{gdk, glib, graphene, gsk, prelude::*, subclass::prelude::*};
 
 use num_complex::Complex64;
 

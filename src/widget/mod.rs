@@ -1,3 +1,5 @@
+use gtk::glib;
+
 mod imp;
 
 glib::wrapper! {
