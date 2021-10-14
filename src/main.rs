@@ -34,9 +34,31 @@ struct Pixel {
 
 #[derive(Debug)]
 struct Image {
-    pixels: Vec<u8>,
+    pixels: Vec<Pixel>,
     width: usize,
     height: usize,
+}
+
+impl AsRef<[u8]> for Image {
+    fn as_ref(&self) -> &[u8] {
+        unsafe {
+            use std::slice;
+
+            let (ptr, len) = (self.pixels.as_ptr(), self.pixels.len());
+            slice::from_raw_parts(ptr as *const u8, len * 4)
+        }
+    }
+}
+
+impl AsMut<[u8]> for Image {
+    fn as_mut(&mut self) -> &mut [u8] {
+        unsafe {
+            use std::slice;
+
+            let (ptr, len) = (self.pixels.as_mut_ptr(), self.pixels.len());
+            slice::from_raw_parts_mut(ptr as *mut u8, len * 4)
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -115,21 +137,6 @@ impl Pixel {
     }
 }
 
-fn pixels_to_bytes(pixels: Vec<Pixel>) -> Vec<u8> {
-    unsafe {
-        use std::mem;
-
-        assert_eq!(4 * mem::size_of::<u8>(), mem::size_of::<Pixel>());
-
-        let mut pixels = mem::ManuallyDrop::new(pixels);
-        Vec::from_raw_parts(
-            pixels.as_mut_ptr() as *mut u8,
-            pixels.len() * 4,
-            pixels.capacity() * 4,
-        )
-    }
-}
-
 fn create_image(rect: Rectangle, target_width: usize, target_height: usize) -> Image {
     let (xscale, yscale) = (
         rect.width / (target_width as f64 - 1.0),
@@ -169,7 +176,6 @@ fn create_image(rect: Rectangle, target_width: usize, target_height: usize) -> I
         .collect::<Vec<_>>();
 
     assert_eq!(pixels.len(), target_width * target_height);
-    let pixels = pixels_to_bytes(pixels);
 
     Image {
         pixels,
@@ -543,12 +549,17 @@ fn build_ui(application: &gtk::Application) {
     let main_context = glib::MainContext::default();
     surface_receiver.attach(Some(&main_context), move |image| {
         if let Some(app) = app_weak.upgrade() {
-            let surface = cairo::ImageSurface::create_for_data(
-                image.pixels,
-                cairo::Format::Rgb24,
+            let (width, height, stride) = (
                 image.width as i32,
                 image.height as i32,
                 image.width as i32 * 4,
+            );
+            let surface = cairo::ImageSurface::create_for_data(
+                image,
+                cairo::Format::Rgb24,
+                width,
+                height,
+                stride,
             )
             .unwrap();
             app.on_render_done(surface);
