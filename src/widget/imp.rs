@@ -14,21 +14,32 @@ use lazy_static::lazy_static;
 
 #[cfg(target_endian = "big")]
 #[repr(packed)]
-#[derive(Default, Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug)]
 struct Pixel {
-    x: u8,
+    b: u8,
+    g: u8,
+    r: u8,
+    a: u8,
+}
+#[cfg(target_endian = "little")]
+#[repr(packed)]
+#[derive(Clone, Copy, Debug)]
+struct Pixel {
+    a: u8,
     r: u8,
     g: u8,
     b: u8,
 }
-#[cfg(target_endian = "little")]
-#[repr(packed)]
-#[derive(Default, Clone, Copy, Debug)]
-struct Pixel {
-    b: u8,
-    g: u8,
-    r: u8,
-    x: u8,
+
+impl Default for Pixel {
+    fn default() -> Self {
+        Pixel {
+            a: 255,
+            r: 0,
+            g: 0,
+            b: 0,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -60,7 +71,7 @@ enum Command {
 pub struct Widget {
     view: Cell<Rectangle>,
     surface_size: Cell<(usize, usize)>,
-    surface: RefCell<Option<cairo::ImageSurface>>,
+    texture: RefCell<Option<gdk::MemoryTexture>>,
     zoom_controller: gtk::GestureDrag,
     zoom_controller_cancelled: Cell<bool>,
     move_controller: gtk::GestureDrag,
@@ -95,7 +106,7 @@ impl Default for Widget {
         Widget {
             view: Cell::new(view),
             surface_size: Cell::new((0, 0)),
-            surface: RefCell::new(None),
+            texture: RefCell::new(None),
             zoom_controller,
             zoom_controller_cancelled: Cell::new(false),
             move_controller,
@@ -220,17 +231,16 @@ impl ObjectImpl for Widget {
                 let (width, height, stride) = (
                     image.width as i32,
                     image.height as i32,
-                    image.width as i32 * 4,
+                    image.width as usize * 4,
                 );
-                let surface = cairo::ImageSurface::create_for_data(
-                    image,
-                    cairo::Format::Rgb24,
+                let texture = gdk::MemoryTexture::new(
                     width,
                     height,
+                    gdk::MemoryFormat::A8r8g8b8,
+                    &glib::Bytes::from_owned(image),
                     stride,
-                )
-                .unwrap();
-                imp.on_render_done(&widget, surface);
+                );
+                imp.on_render_done(&widget, texture);
 
                 glib::Continue(true)
             },
@@ -261,21 +271,24 @@ impl Widget {
         }
     }
 
-    fn on_draw(&self, _widget: &super::Widget, cr: &cairo::Context) {
-        if let Some(ref surface) = *self.surface.borrow() {
-            cr.save().expect("Failed to save cairo state");
-            cr.scale(0.5, 0.5);
-            cr.set_operator(cairo::Operator::Source);
-            cr.set_source_surface(surface, 0.0, 0.0)
-                .expect("Failed to set source surface");
-            cr.paint().expect("Failed to paint");
-            cr.restore().expect("Failed to restore cairo state");
-        } else {
-            cr.save().expect("Failed to save cairo state");
-            cr.set_operator(cairo::Operator::Clear);
-            cr.set_source_rgb(0.0, 0.0, 0.0);
-            cr.paint().expect("Failed to paint");
-            cr.restore().expect("Failed to restore cairo state");
+    fn on_snapshot(&self, _widget: &super::Widget, snapshot: &gtk::Snapshot) {
+        let surface_size = self.surface_size.get();
+
+        snapshot.append_color(
+            &gdk::RGBA::WHITE,
+            &graphene::Rect::new(0.0, 0.0, surface_size.0 as f32, surface_size.1 as f32),
+        );
+
+        if let Some(ref texture) = *self.texture.borrow() {
+            snapshot.append_texture(
+                texture,
+                &graphene::Rect::new(
+                    0.0,
+                    0.0,
+                    texture.width() as f32 / 2.0,
+                    texture.height() as f32 / 2.0,
+                ),
+            );
         }
 
         if self.zoom_controller.is_recognized() {
@@ -289,18 +302,30 @@ impl Widget {
                     width,
                     height,
                 };
-                let rect = calculate_selection_rectangle(rect, self.surface_size.get());
+                let rect = calculate_selection_rectangle(rect, surface_size);
 
-                cr.save().expect("Failed to save cairo state");
-                cr.set_line_width(1.0);
-                cr.rectangle(rect.x, rect.y, rect.width, rect.height);
-                cr.set_source_rgb(1.0, 1.0, 1.0);
-                cr.stroke().expect("Failed to stroke");
-
-                cr.rectangle(rect.x, rect.y, rect.width, rect.height);
-                cr.set_source_rgba(1.0, 1.0, 1.0, 0.2);
-                cr.fill().expect("Failed to fill");
-                cr.restore().expect("Failed to restore cairo state");
+                snapshot.append_border(
+                    &gsk::RoundedRect::from_rect(
+                        graphene::Rect::new(
+                            rect.x as f32,
+                            rect.y as f32,
+                            rect.width as f32,
+                            rect.height as f32,
+                        ),
+                        0.0,
+                    ),
+                    &[1.0; 4],
+                    &[gdk::RGBA::new(1.0, 1.0, 1.0, 1.0); 4],
+                );
+                snapshot.append_color(
+                    &gdk::RGBA::new(1.0, 1.0, 1.0, 0.2),
+                    &graphene::Rect::new(
+                        rect.x as f32,
+                        rect.y as f32,
+                        rect.width as f32,
+                        rect.height as f32,
+                    ),
+                );
             }
         }
     }
@@ -371,7 +396,7 @@ impl Widget {
                 height: (y2 - y1) * yscale,
             });
 
-            let _ = self.surface.borrow_mut().take();
+            let _ = self.texture.borrow_mut().take();
             self.trigger_render(widget);
         }
 
@@ -435,8 +460,8 @@ impl Widget {
         }
     }
 
-    fn on_render_done(&self, widget: &super::Widget, surface: cairo::ImageSurface) {
-        *self.surface.borrow_mut() = Some(surface);
+    fn on_render_done(&self, widget: &super::Widget, texture: gdk::MemoryTexture) {
+        *self.texture.borrow_mut() = Some(texture);
         widget.queue_draw();
     }
 
@@ -477,17 +502,7 @@ impl WidgetImpl for Widget {
     }
 
     fn snapshot(&self, widget: &Self::Type, snapshot: &gtk::Snapshot) {
-        let surface_size = self.surface_size.get();
-        let cr = snapshot
-            .append_cairo(&graphene::Rect::new(
-                0.0,
-                0.0,
-                surface_size.0 as f32,
-                surface_size.1 as f32,
-            ))
-            .unwrap();
-
-        self.on_draw(widget, &cr);
+        self.on_snapshot(widget, snapshot);
     }
 }
 
@@ -604,7 +619,7 @@ lazy_static! {
 
 impl Pixel {
     fn new(r: u8, g: u8, b: u8) -> Self {
-        Pixel { x: 0, r, g, b }
+        Pixel { a: 255, r, g, b }
     }
 
     fn interpolate(self, other: Self, frac: f64) -> Self {
