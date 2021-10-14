@@ -226,20 +226,7 @@ impl ObjectImpl for Widget {
                 };
 
                 let imp = Widget::from_instance(&widget);
-
-                let (width, height, stride) = (
-                    image.width as i32,
-                    image.height as i32,
-                    image.width as usize * 4,
-                );
-                let texture = gdk::MemoryTexture::new(
-                    width,
-                    height,
-                    gdk::MemoryFormat::A8r8g8b8,
-                    &glib::Bytes::from_owned(image),
-                    stride,
-                );
-                imp.on_render_done(&widget, texture);
+                imp.on_render_done(&widget, image);
 
                 glib::Continue(true)
             },
@@ -249,6 +236,25 @@ impl ObjectImpl for Widget {
             .find_source_by_id(&source_id)
             .expect("Source not found");
         *self.channel_source.borrow_mut() = Some(source);
+    }
+}
+
+impl WidgetImpl for Widget {
+    fn measure(
+        &self,
+        _widget: &Self::Type,
+        _orientation: gtk::Orientation,
+        _for_size: i32,
+    ) -> (i32, i32, i32, i32) {
+        (0, 0, -1, -1)
+    }
+
+    fn size_allocate(&self, widget: &Self::Type, width: i32, height: i32, _baseline: i32) {
+        self.on_resize(widget, width, height);
+    }
+
+    fn snapshot(&self, widget: &Self::Type, snapshot: &gtk::Snapshot) {
+        self.on_snapshot(widget, snapshot);
     }
 }
 
@@ -459,7 +465,20 @@ impl Widget {
         }
     }
 
-    fn on_render_done(&self, widget: &super::Widget, texture: gdk::MemoryTexture) {
+    fn on_render_done(&self, widget: &super::Widget, image: Image) {
+        let (width, height, stride) = (
+            image.width as i32,
+            image.height as i32,
+            image.width as usize * 4,
+        );
+        let texture = gdk::MemoryTexture::new(
+            width,
+            height,
+            gdk::MemoryFormat::A8r8g8b8,
+            &glib::Bytes::from_owned(image),
+            stride,
+        );
+
         *self.texture.borrow_mut() = Some(texture);
         widget.queue_draw();
     }
@@ -486,25 +505,6 @@ impl Widget {
     }
 }
 
-impl WidgetImpl for Widget {
-    fn measure(
-        &self,
-        _widget: &Self::Type,
-        _orientation: gtk::Orientation,
-        _for_size: i32,
-    ) -> (i32, i32, i32, i32) {
-        (0, 0, -1, -1)
-    }
-
-    fn size_allocate(&self, widget: &Self::Type, width: i32, height: i32, _baseline: i32) {
-        self.on_resize(widget, width, height);
-    }
-
-    fn snapshot(&self, widget: &Self::Type, snapshot: &gtk::Snapshot) {
-        self.on_snapshot(widget, snapshot);
-    }
-}
-
 impl AsRef<[u8]> for Image {
     fn as_ref(&self) -> &[u8] {
         unsafe {
@@ -516,14 +516,23 @@ impl AsRef<[u8]> for Image {
     }
 }
 
-impl AsMut<[u8]> for Image {
-    fn as_mut(&mut self) -> &mut [u8] {
-        unsafe {
-            use std::slice;
+impl Pixel {
+    fn new(r: u8, g: u8, b: u8) -> Self {
+        Pixel { a: 255, r, g, b }
+    }
 
-            let (ptr, len) = (self.pixels.as_mut_ptr(), self.pixels.len());
-            slice::from_raw_parts_mut(ptr as *mut u8, len * 4)
-        }
+    fn interpolate(self, other: Self, frac: f64) -> Self {
+        Pixel::new(
+            (self.r as f64 + (frac * (other.r as f64 - self.r as f64)))
+                .max(0.0)
+                .min(255.0) as u8,
+            (self.g as f64 + (frac * (other.g as f64 - self.g as f64)))
+                .max(0.0)
+                .min(255.0) as u8,
+            (self.b as f64 + (frac * (other.b as f64 - self.b as f64)))
+                .max(0.0)
+                .min(255.0) as u8,
+        )
     }
 }
 
@@ -613,26 +622,6 @@ static COLORS: Lazy<[Pixel; 360]> = Lazy::new(|| {
 
     colors
 });
-
-impl Pixel {
-    fn new(r: u8, g: u8, b: u8) -> Self {
-        Pixel { a: 255, r, g, b }
-    }
-
-    fn interpolate(self, other: Self, frac: f64) -> Self {
-        Pixel::new(
-            (self.r as f64 + (frac * (other.r as f64 - self.r as f64)))
-                .max(0.0)
-                .min(255.0) as u8,
-            (self.g as f64 + (frac * (other.g as f64 - self.g as f64)))
-                .max(0.0)
-                .min(255.0) as u8,
-            (self.b as f64 + (frac * (other.b as f64 - self.b as f64)))
-                .max(0.0)
-                .min(255.0) as u8,
-        )
-    }
-}
 
 fn create_image(rect: Rectangle, target_width: usize, target_height: usize) -> Image {
     let (xscale, yscale) = (
