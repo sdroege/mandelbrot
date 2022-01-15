@@ -22,6 +22,7 @@ struct Pixel {
 #[repr(packed)]
 #[derive(Clone, Copy, Debug)]
 struct Pixel {
+    #[allow(dead_code)]
     a: u8,
     r: u8,
     g: u8,
@@ -140,78 +141,62 @@ impl ObjectImpl for Widget {
 
         self.zoom_controller
             .connect_drag_begin(move |controller, x, y| {
-                if let Some(widget) = controller.widget() {
-                    let widget = widget.downcast::<super::Widget>().unwrap();
-                    let imp = Widget::from_instance(&widget);
-                    imp.on_zoom_begin(&widget, controller, x, y);
-                }
+                let widget = controller.widget().downcast::<super::Widget>().unwrap();
+                let imp = Widget::from_instance(&widget);
+                imp.on_zoom_begin(&widget, controller, x, y);
             });
 
         self.zoom_controller
             .connect_drag_update(move |controller, off_x, off_y| {
-                if let Some(widget) = controller.widget() {
-                    let widget = widget.downcast::<super::Widget>().unwrap();
-                    let imp = Widget::from_instance(&widget);
-                    imp.on_zoom_update(&widget, controller, off_x, off_y);
-                }
+                let widget = controller.widget().downcast::<super::Widget>().unwrap();
+                let imp = Widget::from_instance(&widget);
+                imp.on_zoom_update(&widget, controller, off_x, off_y);
             });
 
         self.zoom_controller
             .connect_cancel(move |controller, _sequence| {
-                if let Some(widget) = controller.widget() {
-                    let widget = widget.downcast::<super::Widget>().unwrap();
-                    let imp = Widget::from_instance(&widget);
-                    imp.on_zoom_cancelled(&widget, controller);
-                }
+                let widget = controller.widget().downcast::<super::Widget>().unwrap();
+                let imp = Widget::from_instance(&widget);
+                imp.on_zoom_cancelled(&widget, controller);
             });
 
         self.zoom_controller
             .connect_drag_end(move |controller, off_x, off_y| {
-                if let Some(widget) = controller.widget() {
-                    let widget = widget.downcast::<super::Widget>().unwrap();
-                    let imp = Widget::from_instance(&widget);
-                    imp.on_zoom_end(&widget, controller, off_x, off_y);
-                }
+                let widget = controller.widget().downcast::<super::Widget>().unwrap();
+                let imp = Widget::from_instance(&widget);
+                imp.on_zoom_end(&widget, controller, off_x, off_y);
             });
 
         widget.add_controller(&self.move_controller);
 
         self.move_controller
             .connect_drag_begin(move |controller, x, y| {
-                if let Some(widget) = controller.widget() {
-                    let widget = widget.downcast::<super::Widget>().unwrap();
-                    let imp = Widget::from_instance(&widget);
-                    imp.on_move_begin(&widget, controller, x, y);
-                }
+                let widget = controller.widget().downcast::<super::Widget>().unwrap();
+                let imp = Widget::from_instance(&widget);
+                imp.on_move_begin(&widget, controller, x, y);
             });
 
         self.move_controller
             .connect_drag_update(move |controller, off_x, off_y| {
-                if let Some(widget) = controller.widget() {
-                    let widget = widget.downcast::<super::Widget>().unwrap();
-                    let imp = Widget::from_instance(&widget);
-                    imp.on_move_update(&widget, controller, off_x, off_y);
-                }
+                let widget = controller.widget().downcast::<super::Widget>().unwrap();
+                let imp = Widget::from_instance(&widget);
+                imp.on_move_update(&widget, controller, off_x, off_y);
             });
 
         self.move_controller
             .connect_drag_end(move |controller, off_x, off_y| {
-                if let Some(widget) = controller.widget() {
-                    let widget = widget.downcast::<super::Widget>().unwrap();
-                    let imp = Widget::from_instance(&widget);
-                    imp.on_move_end(&widget, controller, off_x, off_y);
-                }
+                let widget = controller.widget().downcast::<super::Widget>().unwrap();
+                let imp = Widget::from_instance(&widget);
+                imp.on_move_end(&widget, controller, off_x, off_y);
             });
 
         let key_controller = gtk::EventControllerKey::new();
         widget.add_controller(&key_controller);
 
         key_controller.connect_key_pressed(move |controller, keyval, keycode, state| {
-            if let Some(widget) = controller.widget() {
-                let widget = widget.downcast::<super::Widget>().unwrap();
-                let imp = Widget::from_instance(&widget);
-                imp.on_key_pressed(&widget, keyval, keycode, state);
-            }
+            let widget = controller.widget().downcast::<super::Widget>().unwrap();
+            let imp = Widget::from_instance(&widget);
+            imp.on_key_pressed(&widget, keyval, keycode, state);
             gtk::Inhibit(false)
         });
 
@@ -446,11 +431,11 @@ impl Widget {
     fn on_key_pressed(
         &self,
         widget: &super::Widget,
-        keyval: gdk::keys::Key,
+        keyval: gdk::Key,
         _keycode: u32,
         _state: gdk::ModifierType,
     ) {
-        if keyval == gdk::keys::constants::Escape {
+        if keyval == gdk::Key::Escape {
             self.zoom_controller.reset();
             widget.queue_draw();
         }
