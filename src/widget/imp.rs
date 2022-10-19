@@ -132,86 +132,87 @@ impl ObjectSubclass for Widget {
 }
 
 impl ObjectImpl for Widget {
-    fn constructed(&self, widget: &Self::Type) {
-        self.parent_constructed(widget);
+    fn constructed(&self) {
+        self.parent_constructed();
 
-        widget.set_focusable(true);
+        let instance = self.instance();
 
-        widget.add_controller(&self.zoom_controller);
+        instance.set_focusable(true);
+
+        instance.add_controller(&self.zoom_controller);
 
         self.zoom_controller
             .connect_drag_begin(move |controller, x, y| {
                 let widget = controller.widget().downcast::<super::Widget>().unwrap();
-                let imp = Widget::from_instance(&widget);
-                imp.on_zoom_begin(&widget, controller, x, y);
+                let imp = widget.imp();
+                imp.on_zoom_begin(controller, x, y);
             });
 
         self.zoom_controller
             .connect_drag_update(move |controller, off_x, off_y| {
                 let widget = controller.widget().downcast::<super::Widget>().unwrap();
-                let imp = Widget::from_instance(&widget);
-                imp.on_zoom_update(&widget, controller, off_x, off_y);
+                let imp = widget.imp();
+                imp.on_zoom_update(controller, off_x, off_y);
             });
 
         self.zoom_controller
             .connect_cancel(move |controller, _sequence| {
                 let widget = controller.widget().downcast::<super::Widget>().unwrap();
-                let imp = Widget::from_instance(&widget);
-                imp.on_zoom_cancelled(&widget, controller);
+                let imp = widget.imp();
+                imp.on_zoom_cancelled(controller);
             });
 
         self.zoom_controller
             .connect_drag_end(move |controller, off_x, off_y| {
                 let widget = controller.widget().downcast::<super::Widget>().unwrap();
-                let imp = Widget::from_instance(&widget);
-                imp.on_zoom_end(&widget, controller, off_x, off_y);
+                let imp = widget.imp();
+                imp.on_zoom_end(controller, off_x, off_y);
             });
 
-        widget.add_controller(&self.move_controller);
+        instance.add_controller(&self.move_controller);
 
         self.move_controller
             .connect_drag_begin(move |controller, x, y| {
                 let widget = controller.widget().downcast::<super::Widget>().unwrap();
-                let imp = Widget::from_instance(&widget);
-                imp.on_move_begin(&widget, controller, x, y);
+                let imp = widget.imp();
+                imp.on_move_begin(controller, x, y);
             });
 
         self.move_controller
             .connect_drag_update(move |controller, off_x, off_y| {
                 let widget = controller.widget().downcast::<super::Widget>().unwrap();
-                let imp = Widget::from_instance(&widget);
-                imp.on_move_update(&widget, controller, off_x, off_y);
+                let imp = widget.imp();
+                imp.on_move_update(controller, off_x, off_y);
             });
 
         self.move_controller
             .connect_drag_end(move |controller, off_x, off_y| {
                 let widget = controller.widget().downcast::<super::Widget>().unwrap();
-                let imp = Widget::from_instance(&widget);
-                imp.on_move_end(&widget, controller, off_x, off_y);
+                let imp = widget.imp();
+                imp.on_move_end(controller, off_x, off_y);
             });
 
         let key_controller = gtk::EventControllerKey::new();
-        widget.add_controller(&key_controller);
+        instance.add_controller(&key_controller);
 
         key_controller.connect_key_pressed(move |controller, keyval, keycode, state| {
             let widget = controller.widget().downcast::<super::Widget>().unwrap();
-            let imp = Widget::from_instance(&widget);
-            imp.on_key_pressed(&widget, keyval, keycode, state);
+            let imp = widget.imp();
+            imp.on_key_pressed(keyval, keycode, state);
             gtk::Inhibit(false)
         });
 
-        let widget_weak = widget.downgrade();
+        let imp_weak = self.downgrade();
         let main_context = glib::MainContext::default();
         let source_id = self.surface_receiver.borrow_mut().take().unwrap().attach(
             Some(&main_context),
             move |image| {
-                let widget = match widget_weak.upgrade() {
-                    Some(widget) => widget,
+                let imp = match imp_weak.upgrade() {
+                    Some(imp) => imp,
                     None => return glib::Continue(false),
                 };
 
-                let imp = Widget::from_instance(&widget);
-                imp.on_render_done(&widget, image);
+                imp.on_render_done(image);
 
                 glib::Continue(true)
             },
@@ -225,17 +226,17 @@ impl ObjectImpl for Widget {
 }
 
 impl WidgetImpl for Widget {
-    fn size_allocate(&self, widget: &Self::Type, width: i32, height: i32, _baseline: i32) {
-        self.on_resize(widget, width, height);
+    fn size_allocate(&self, width: i32, height: i32, _baseline: i32) {
+        self.on_resize(width, height);
     }
 
-    fn snapshot(&self, widget: &Self::Type, snapshot: &gtk::Snapshot) {
-        self.on_snapshot(widget, snapshot);
+    fn snapshot(&self, snapshot: &gtk::Snapshot) {
+        self.on_snapshot(snapshot);
     }
 }
 
 impl Widget {
-    fn on_resize(&self, widget: &super::Widget, width: i32, height: i32) {
+    fn on_resize(&self, width: i32, height: i32) {
         let old_size = self.surface_size.get();
         let new_size = (width as usize, height as usize);
         if new_size != old_size {
@@ -247,12 +248,12 @@ impl Widget {
             }
 
             self.surface_size.set(new_size);
-            widget.queue_draw();
-            self.trigger_render(widget);
+            self.instance().queue_draw();
+            self.trigger_render();
         }
     }
 
-    fn on_snapshot(&self, _widget: &super::Widget, snapshot: &gtk::Snapshot) {
+    fn on_snapshot(&self, snapshot: &gtk::Snapshot) {
         let surface_size = self.surface_size.get();
 
         snapshot.append_color(
@@ -311,34 +312,16 @@ impl Widget {
         }
     }
 
-    fn on_zoom_begin(
-        &self,
-        _widget: &super::Widget,
-        _controller: &gtk::GestureDrag,
-        _x: f64,
-        _y: f64,
-    ) {
+    fn on_zoom_begin(&self, _controller: &gtk::GestureDrag, _x: f64, _y: f64) {
         self.zoom_controller_cancelled.set(false);
         self.move_controller.reset();
     }
 
-    fn on_zoom_update(
-        &self,
-        widget: &super::Widget,
-        _controller: &gtk::GestureDrag,
-        _off_x: f64,
-        _off_y: f64,
-    ) {
-        widget.queue_draw();
+    fn on_zoom_update(&self, _controller: &gtk::GestureDrag, _off_x: f64, _off_y: f64) {
+        self.instance().queue_draw();
     }
 
-    fn on_zoom_end(
-        &self,
-        widget: &super::Widget,
-        _controller: &gtk::GestureDrag,
-        _off_x: f64,
-        _off_y: f64,
-    ) {
+    fn on_zoom_end(&self, _controller: &gtk::GestureDrag, _off_x: f64, _off_y: f64) {
         if self.zoom_controller_cancelled.get() {
             return;
         }
@@ -378,44 +361,26 @@ impl Widget {
             });
 
             let _ = self.texture.borrow_mut().take();
-            self.trigger_render(widget);
+            self.trigger_render();
         }
 
-        widget.queue_draw();
+        self.instance().queue_draw();
     }
 
-    fn on_zoom_cancelled(&self, _widget: &super::Widget, _controller: &gtk::GestureDrag) {
+    fn on_zoom_cancelled(&self, _controller: &gtk::GestureDrag) {
         self.zoom_controller_cancelled.set(true);
     }
 
-    fn on_move_begin(
-        &self,
-        _widget: &super::Widget,
-        _controller: &gtk::GestureDrag,
-        _x: f64,
-        _y: f64,
-    ) {
+    fn on_move_begin(&self, _controller: &gtk::GestureDrag, _x: f64, _y: f64) {
         self.zoom_controller.reset();
     }
 
-    fn on_move_update(
-        &self,
-        widget: &super::Widget,
-        _controller: &gtk::GestureDrag,
-        _off_x: f64,
-        _off_y: f64,
-    ) {
-        widget.queue_draw();
-        self.trigger_render(widget);
+    fn on_move_update(&self, _controller: &gtk::GestureDrag, _off_x: f64, _off_y: f64) {
+        self.instance().queue_draw();
+        self.trigger_render();
     }
 
-    fn on_move_end(
-        &self,
-        widget: &super::Widget,
-        _controller: &gtk::GestureDrag,
-        _off_x: f64,
-        _off_y: f64,
-    ) {
+    fn on_move_end(&self, _controller: &gtk::GestureDrag, _off_x: f64, _off_y: f64) {
         if let Some((x, y)) = self.move_controller.offset() {
             let mut view = self.view.get();
             let surface_size = self.surface_size.get();
@@ -423,25 +388,19 @@ impl Widget {
             view.y -= y / surface_size.1 as f64 * view.height;
             self.view.set(view);
 
-            widget.queue_draw();
-            self.trigger_render(widget);
+            self.instance().queue_draw();
+            self.trigger_render();
         }
     }
 
-    fn on_key_pressed(
-        &self,
-        widget: &super::Widget,
-        keyval: gdk::Key,
-        _keycode: u32,
-        _state: gdk::ModifierType,
-    ) {
+    fn on_key_pressed(&self, keyval: gdk::Key, _keycode: u32, _state: gdk::ModifierType) {
         if keyval == gdk::Key::Escape {
             self.zoom_controller.reset();
-            widget.queue_draw();
+            self.instance().queue_draw();
         }
     }
 
-    fn on_render_done(&self, widget: &super::Widget, image: Image) {
+    fn on_render_done(&self, image: Image) {
         let (width, height, stride) = (
             image.width as i32,
             image.height as i32,
@@ -456,10 +415,10 @@ impl Widget {
         );
 
         *self.texture.borrow_mut() = Some(texture);
-        widget.queue_draw();
+        self.instance().queue_draw();
     }
 
-    fn trigger_render(&self, _widget: &super::Widget) {
+    fn trigger_render(&self) {
         let mut rect = self.view.get();
         let surface_size = self.surface_size.get();
 
