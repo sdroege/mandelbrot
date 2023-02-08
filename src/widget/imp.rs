@@ -135,11 +135,9 @@ impl ObjectImpl for Widget {
     fn constructed(&self) {
         self.parent_constructed();
 
-        let instance = self.instance();
+        let obj = self.obj();
 
-        instance.set_focusable(true);
-
-        instance.add_controller(&self.zoom_controller);
+        obj.set_focusable(true);
 
         self.zoom_controller
             .connect_drag_begin(move |controller, x, y| {
@@ -169,7 +167,7 @@ impl ObjectImpl for Widget {
                 imp.on_zoom_end(controller, off_x, off_y);
             });
 
-        instance.add_controller(&self.move_controller);
+        obj.add_controller(self.zoom_controller.clone());
 
         self.move_controller
             .connect_drag_begin(move |controller, x, y| {
@@ -192,8 +190,9 @@ impl ObjectImpl for Widget {
                 imp.on_move_end(controller, off_x, off_y);
             });
 
+        obj.add_controller(self.move_controller.clone());
+
         let key_controller = gtk::EventControllerKey::new();
-        instance.add_controller(&key_controller);
 
         key_controller.connect_key_pressed(move |controller, keyval, keycode, state| {
             let widget = controller.widget().downcast::<super::Widget>().unwrap();
@@ -201,6 +200,8 @@ impl ObjectImpl for Widget {
             imp.on_key_pressed(keyval, keycode, state);
             gtk::Inhibit(false)
         });
+
+        obj.add_controller(key_controller);
 
         let imp_weak = self.downgrade();
         let main_context = glib::MainContext::default();
@@ -248,7 +249,7 @@ impl Widget {
             }
 
             self.surface_size.set(new_size);
-            self.instance().queue_draw();
+            self.obj().queue_draw();
             self.trigger_render();
         }
     }
@@ -318,7 +319,7 @@ impl Widget {
     }
 
     fn on_zoom_update(&self, _controller: &gtk::GestureDrag, _off_x: f64, _off_y: f64) {
-        self.instance().queue_draw();
+        self.obj().queue_draw();
     }
 
     fn on_zoom_end(&self, _controller: &gtk::GestureDrag, _off_x: f64, _off_y: f64) {
@@ -364,7 +365,7 @@ impl Widget {
             self.trigger_render();
         }
 
-        self.instance().queue_draw();
+        self.obj().queue_draw();
     }
 
     fn on_zoom_cancelled(&self, _controller: &gtk::GestureDrag) {
@@ -376,7 +377,7 @@ impl Widget {
     }
 
     fn on_move_update(&self, _controller: &gtk::GestureDrag, _off_x: f64, _off_y: f64) {
-        self.instance().queue_draw();
+        self.obj().queue_draw();
         self.trigger_render();
     }
 
@@ -388,7 +389,7 @@ impl Widget {
             view.y -= y / surface_size.1 as f64 * view.height;
             self.view.set(view);
 
-            self.instance().queue_draw();
+            self.obj().queue_draw();
             self.trigger_render();
         }
     }
@@ -396,7 +397,7 @@ impl Widget {
     fn on_key_pressed(&self, keyval: gdk::Key, _keycode: u32, _state: gdk::ModifierType) {
         if keyval == gdk::Key::Escape {
             self.zoom_controller.reset();
-            self.instance().queue_draw();
+            self.obj().queue_draw();
         }
     }
 
@@ -415,7 +416,7 @@ impl Widget {
         );
 
         *self.texture.borrow_mut() = Some(texture);
-        self.instance().queue_draw();
+        self.obj().queue_draw();
     }
 
     fn trigger_render(&self) {

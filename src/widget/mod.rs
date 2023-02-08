@@ -14,6 +14,6 @@ impl Default for Widget {
 
 impl Widget {
     pub fn new() -> Self {
-        glib::Object::new(&[])
+        glib::Object::new()
     }
 }
