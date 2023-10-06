@@ -83,7 +83,8 @@ impl Default for Widget {
         use std::thread;
 
         let (command_sender, command_receiver) = mpsc::channel();
-        let (surface_sender, surface_receiver) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
+        let (surface_sender, surface_receiver) =
+            glib::MainContext::channel(glib::Priority::DEFAULT);
 
         thread::spawn(move || {
             render_thread(&command_receiver, &surface_sender);
@@ -198,7 +199,7 @@ impl ObjectImpl for Widget {
             let widget = controller.widget().downcast::<super::Widget>().unwrap();
             let imp = widget.imp();
             imp.on_key_pressed(keyval, keycode, state);
-            gtk::Inhibit(false)
+            glib::Propagation::Proceed
         });
 
         obj.add_controller(key_controller);
@@ -210,12 +211,12 @@ impl ObjectImpl for Widget {
             move |image| {
                 let imp = match imp_weak.upgrade() {
                     Some(imp) => imp,
-                    None => return glib::Continue(false),
+                    None => return glib::ControlFlow::Break,
                 };
 
                 imp.on_render_done(image);
 
-                glib::Continue(true)
+                glib::ControlFlow::Continue
             },
         );
 
