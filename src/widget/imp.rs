@@ -403,11 +403,7 @@ impl Widget {
     }
 
     fn on_render_done(&self, image: Image) {
-        let (width, height, stride) = (
-            image.width as i32,
-            image.height as i32,
-            image.width as usize * 4,
-        );
+        let (width, height, stride) = (image.width as i32, image.height as i32, image.width * 4);
         let texture = gdk::MemoryTexture::new(
             width,
             height,
@@ -515,12 +511,12 @@ fn calculate_selection_rectangle(rect: Rectangle, surface_size: (usize, usize)) 
         (
             rect.width,
             rect.height.signum()
-                * f64::abs(rect.width as f64 * surface_size.1 as f64 / surface_size.0 as f64),
+                * f64::abs(rect.width * surface_size.1 as f64 / surface_size.0 as f64),
         )
     } else {
         (
             rect.width.signum()
-                * f64::abs(rect.height as f64 * surface_size.0 as f64 / surface_size.1 as f64),
+                * f64::abs(rect.height * surface_size.0 as f64 / surface_size.1 as f64),
             rect.height,
         )
     };
@@ -590,7 +586,7 @@ fn create_image(rect: Rectangle, target_width: usize, target_height: usize) -> I
                 it += 1;
             }
 
-            if (it as usize) < max_it {
+            if it < max_it {
                 let log_zn = f64::ln(z.norm_sqr()) / 2.0;
                 let nu = f64::ln(log_zn / f64::ln(2.0)) / f64::ln(2.0);
 
