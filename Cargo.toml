@@ -6,7 +6,8 @@ edition = "2018"
 license = "GPL-3.0"
 
 [dependencies]
-gtk = { package = "gtk4", version = "0.7" }
+gtk = { package = "gtk4", version = "0.8" }
 num-complex = "0.4"
 rayon = "1.0"
 once_cell = "1"
+async-channel = "2.0"

@@ -74,7 +74,7 @@ pub struct Widget {
     zoom_controller_cancelled: Cell<bool>,
     move_controller: gtk::GestureDrag,
     command_sender: mpsc::Sender<Command>,
-    surface_receiver: RefCell<Option<glib::Receiver<Image>>>,
+    surface_receiver: RefCell<Option<async_channel::Receiver<Image>>>,
     channel_source: RefCell<Option<glib::Source>>,
 }
 
@@ -83,8 +83,7 @@ impl Default for Widget {
         use std::thread;
 
         let (command_sender, command_receiver) = mpsc::channel();
-        let (surface_sender, surface_receiver) =
-            glib::MainContext::channel(glib::Priority::DEFAULT);
+        let (surface_sender, surface_receiver) = async_channel::bounded(1);
 
         thread::spawn(move || {
             render_thread(&command_receiver, &surface_sender);
@@ -206,24 +205,17 @@ impl ObjectImpl for Widget {
 
         let imp_weak = self.downgrade();
         let main_context = glib::MainContext::default();
-        let source_id = self.surface_receiver.borrow_mut().take().unwrap().attach(
-            Some(&main_context),
-            move |image| {
-                let imp = match imp_weak.upgrade() {
-                    Some(imp) => imp,
-                    None => return glib::ControlFlow::Break,
+        let surface_receiver = self.surface_receiver.borrow_mut().take().unwrap();
+        let join_handle = main_context.spawn_local(async move {
+            while let Ok(image) = surface_receiver.recv().await {
+                let Some(imp) = imp_weak.upgrade() else {
+                    break;
                 };
-
                 imp.on_render_done(image);
+            }
+        });
 
-                glib::ControlFlow::Continue
-            },
-        );
-
-        let source = main_context
-            .find_source_by_id(&source_id)
-            .expect("Source not found");
-        *self.channel_source.borrow_mut() = Some(source);
+        *self.channel_source.borrow_mut() = Some(join_handle.source().clone());
     }
 }
 
@@ -475,7 +467,7 @@ impl Pixel {
     }
 }
 
-fn render_thread(commands: &mpsc::Receiver<Command>, surfaces: &glib::Sender<Image>) {
+fn render_thread(commands: &mpsc::Receiver<Command>, surfaces: &async_channel::Sender<Image>) {
     loop {
         let mut command = commands.recv().unwrap();
 
@@ -495,7 +487,7 @@ fn render_thread(commands: &mpsc::Receiver<Command>, surfaces: &glib::Sender<Ima
                 target_height,
             } => {
                 let surface = create_image(rect, target_width, target_height);
-                surfaces.send(surface).unwrap();
+                surfaces.send_blocking(surface).unwrap();
             }
         }
     }
