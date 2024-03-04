@@ -1,0 +1,6 @@
+[wrap-file]
+directory = num-complex-0.4.5
+source_url = https://crates.io/api/v1/crates/num-complex/0.4.5/download
+source_filename = num-complex-0.4.5.tar.gz
+source_hash = 23c6602fda94a57c990fe0df199a035d83576b496aa29f4e634a8ac6004e68a6
+method = cargo

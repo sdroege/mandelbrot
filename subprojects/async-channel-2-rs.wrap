@@ -1,0 +1,6 @@
+[wrap-file]
+directory = async-channel-2.2.0
+source_url = https://crates.io/api/v1/crates/async-channel/2.2.0/download
+source_filename = async-channel-2.2.0.tar.gz
+source_hash = f28243a43d821d11341ab73c80bed182dc015c514b951616cf79bd4af39af0c3
+method = cargo
