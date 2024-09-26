@@ -141,28 +141,44 @@ impl ObjectImpl for Widget {
 
         self.zoom_controller
             .connect_drag_begin(move |controller, x, y| {
-                let widget = controller.widget().downcast::<super::Widget>().unwrap();
+                let widget = controller
+                    .widget()
+                    .unwrap()
+                    .downcast::<super::Widget>()
+                    .unwrap();
                 let imp = widget.imp();
                 imp.on_zoom_begin(controller, x, y);
             });
 
         self.zoom_controller
             .connect_drag_update(move |controller, off_x, off_y| {
-                let widget = controller.widget().downcast::<super::Widget>().unwrap();
+                let widget = controller
+                    .widget()
+                    .unwrap()
+                    .downcast::<super::Widget>()
+                    .unwrap();
                 let imp = widget.imp();
                 imp.on_zoom_update(controller, off_x, off_y);
             });
 
         self.zoom_controller
             .connect_cancel(move |controller, _sequence| {
-                let widget = controller.widget().downcast::<super::Widget>().unwrap();
+                let widget = controller
+                    .widget()
+                    .unwrap()
+                    .downcast::<super::Widget>()
+                    .unwrap();
                 let imp = widget.imp();
                 imp.on_zoom_cancelled(controller);
             });
 
         self.zoom_controller
             .connect_drag_end(move |controller, off_x, off_y| {
-                let widget = controller.widget().downcast::<super::Widget>().unwrap();
+                let widget = controller
+                    .widget()
+                    .unwrap()
+                    .downcast::<super::Widget>()
+                    .unwrap();
                 let imp = widget.imp();
                 imp.on_zoom_end(controller, off_x, off_y);
             });
@@ -171,21 +187,33 @@ impl ObjectImpl for Widget {
 
         self.move_controller
             .connect_drag_begin(move |controller, x, y| {
-                let widget = controller.widget().downcast::<super::Widget>().unwrap();
+                let widget = controller
+                    .widget()
+                    .unwrap()
+                    .downcast::<super::Widget>()
+                    .unwrap();
                 let imp = widget.imp();
                 imp.on_move_begin(controller, x, y);
             });
 
         self.move_controller
             .connect_drag_update(move |controller, off_x, off_y| {
-                let widget = controller.widget().downcast::<super::Widget>().unwrap();
+                let widget = controller
+                    .widget()
+                    .unwrap()
+                    .downcast::<super::Widget>()
+                    .unwrap();
                 let imp = widget.imp();
                 imp.on_move_update(controller, off_x, off_y);
             });
 
         self.move_controller
             .connect_drag_end(move |controller, off_x, off_y| {
-                let widget = controller.widget().downcast::<super::Widget>().unwrap();
+                let widget = controller
+                    .widget()
+                    .unwrap()
+                    .downcast::<super::Widget>()
+                    .unwrap();
                 let imp = widget.imp();
                 imp.on_move_end(controller, off_x, off_y);
             });
@@ -195,7 +223,11 @@ impl ObjectImpl for Widget {
         let key_controller = gtk::EventControllerKey::new();
 
         key_controller.connect_key_pressed(move |controller, keyval, keycode, state| {
-            let widget = controller.widget().downcast::<super::Widget>().unwrap();
+            let widget = controller
+                .widget()
+                .unwrap()
+                .downcast::<super::Widget>()
+                .unwrap();
             let imp = widget.imp();
             imp.on_key_pressed(keyval, keycode, state);
             glib::Propagation::Proceed
