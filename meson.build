@@ -34,7 +34,7 @@ rayon_dep = dependency('rayon-1-rs')
 once_cell_dep = dependency('once_cell-1-rs')
 async_channel_dep = dependency('async-channel-2-rs')
 zerocopy_dep = dependency('zerocopy-0.7-rs')
-gtk_dep = dependency('gtk4-0.8-rs')
+gtk_dep = dependency('gtk4-0.9-rs')
 
 executable('mandelbrot', 'src/main.rs',
   rust_dependency_map : {

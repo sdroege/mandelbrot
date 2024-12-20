@@ -1,0 +1,6 @@
+[wrap-file]
+directory = gtk4-0.9.5
+source_url = https://crates.io/api/v1/crates/gtk4/0.9.5/download
+source_filename = gtk4-0.9.5.tar.gz
+source_hash = b697ff938136625f6acf75f01951220f47a45adcf0060ee55b4671cf734dac44
+method = cargo
