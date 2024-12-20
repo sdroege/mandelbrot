@@ -1,6 +1,6 @@
 [wrap-file]
-directory = zerocopy-0.7.32
-source_url = https://crates.io/api/v1/crates/zerocopy/0.7.32/download
-source_filename = zerocopy-0.7.32.tar.gz
-source_hash = 74d4d3961e53fa4c9a25a8637fc2bfaf2595b3d3ae34875568a5cf64787716be
+directory = zerocopy-0.7.35
+source_url = https://crates.io/api/v1/crates/zerocopy/0.7.35/download
+source_filename = zerocopy-0.7.35.tar.gz
+source_hash = 1b9b4fd18abc82b8136838da5d50bae7bdea537c574d8dc1a34ed098d6c166f0
 method = cargo
