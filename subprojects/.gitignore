@@ -65,4 +65,5 @@
 /unicode-ident-1*
 /winnow-0.6*
 /zerocopy-0.7*
+/zerocopy-derive-0.7*
 !/*.wrap
