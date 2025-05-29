@@ -14,8 +14,9 @@ mouse button.
 For building the application with [meson](https://mesonbuild.com/), the
 following PRs, that were not merged yet at the time of writing, are needed:
 
-  * https://github.com/mesonbuild/meson/pull/12363
-  * https://github.com/mesonbuild/meson/pull/12936
+  * https://github.com/mesonbuild/meson/pull/13780
+  * https://github.com/mesonbuild/meson/pull/14659
+  * https://github.com/mesonbuild/meson/pull/14660
 
 ```bash
 # Building
