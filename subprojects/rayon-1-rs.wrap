@@ -1,6 +1,0 @@
-[wrap-file]
-directory = rayon-1.9.0
-source_url = https://crates.io/api/v1/crates/rayon/1.9.0/download
-source_filename = rayon-1.9.0.tar.gz
-source_hash = e4963ed1bc86e4f3ee217022bd855b297cef07fb9eac5dfa1f788b220b49b3bd
-method = cargo
