@@ -11,7 +11,7 @@ use once_cell::sync::Lazy;
 
 #[cfg(target_endian = "big")]
 #[repr(packed)]
-#[derive(Clone, Copy, Debug, zerocopy::AsBytes)]
+#[derive(Clone, Copy, Debug, zerocopy::IntoBytes, zerocopy::Immutable)]
 struct Pixel {
     b: u8,
     g: u8,
@@ -20,7 +20,7 @@ struct Pixel {
 }
 #[cfg(target_endian = "little")]
 #[repr(packed)]
-#[derive(Clone, Copy, Debug, zerocopy::AsBytes)]
+#[derive(Clone, Copy, Debug, zerocopy::IntoBytes, zerocopy::Immutable)]
 struct Pixel {
     #[allow(dead_code)]
     a: u8,
@@ -464,7 +464,7 @@ impl Widget {
 
 impl AsRef<[u8]> for Image {
     fn as_ref(&self) -> &[u8] {
-        use zerocopy::AsBytes;
+        use zerocopy::IntoBytes;
         self.pixels.as_bytes()
     }
 }
@@ -590,7 +590,7 @@ fn create_image(rect: Rectangle, target_width: usize, target_height: usize) -> I
 
     let pixels = (0..target_height)
         .into_par_iter()
-        .flat_map(|target_y| rayon::iter::repeatn(target_y, target_width).enumerate())
+        .flat_map(|target_y| rayon::iter::repeat_n(target_y, target_width).enumerate())
         .map(|(target_x, target_y)| {
             let c = Complex64::new(
                 rect.x + target_x as f64 * xscale,

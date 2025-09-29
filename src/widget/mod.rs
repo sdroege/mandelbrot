@@ -3,7 +3,7 @@ use gtk::glib;
 mod imp;
 
 glib::wrapper! {
-    pub struct Widget(ObjectSubclass<imp::Widget>) @extends gtk::Widget;
+    pub struct Widget(ObjectSubclass<imp::Widget>) @extends gtk::Widget, @implements gtk::Buildable, gtk::ConstraintTarget, gtk::Accessible;
 }
 
 impl Default for Widget {
