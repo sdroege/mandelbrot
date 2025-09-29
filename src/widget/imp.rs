@@ -10,7 +10,7 @@ use std::sync::mpsc;
 use once_cell::sync::Lazy;
 
 #[cfg(target_endian = "big")]
-#[repr(packed)]
+#[repr(C, packed)]
 #[derive(Clone, Copy, Debug, zerocopy::IntoBytes, zerocopy::Immutable)]
 struct Pixel {
     b: u8,
@@ -19,7 +19,7 @@ struct Pixel {
     a: u8,
 }
 #[cfg(target_endian = "little")]
-#[repr(packed)]
+#[repr(C, packed)]
 #[derive(Clone, Copy, Debug, zerocopy::IntoBytes, zerocopy::Immutable)]
 struct Pixel {
     #[allow(dead_code)]
