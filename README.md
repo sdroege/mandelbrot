@@ -12,11 +12,11 @@ mouse button.
 ### meson build
 
 For building the application with [meson](https://mesonbuild.com/), the
-following PRs, that were not merged yet at the time of writing, are needed:
+following PR, that is a draft at the time of writing, is needed:
 
-  * https://github.com/mesonbuild/meson/pull/13780
-  * https://github.com/mesonbuild/meson/pull/14659
-  * https://github.com/mesonbuild/meson/pull/14660
+  * https://github.com/mesonbuild/meson/pull/15069
+
+The PR in turn is a superset of https://github.com/mesonbuild/meson/pull/14906.
 
 ```bash
 # Building
@@ -27,6 +27,8 @@ _builddir/mandelbrot
 # Installing
 ninja -C _builddir install
 ```
+
+Cross compilation is not supported yet.
 
 ### Screenshot
 
