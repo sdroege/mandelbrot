@@ -3,9 +3,6 @@ project('mandelbrot', 'rust',
   meson_version : '>= 1.0.0',
   default_options : ['buildtype=debugoptimized',
                      'rust_std=2018',
-                     # workaround for feature resolution bug
-                     'futures-core-0.3-rs:feature-std=true',
-                     'futures-core-0.3-rs:feature-alloc=true',
                     ]
 )
 
@@ -16,12 +13,18 @@ add_global_arguments(
   language: 'rust'
 )
 
+# the object is not used yet, but it triggers dependency resolution
+# and applies dependency features in Cargo.toml.
+cargo = import('rust').workspace()
+
+# later: cargo.package().executables() replaces everything below
+
 num_complex_dep = dependency('num-complex-0.4-rs')
 rayon_dep = dependency('rayon-1-rs')
 once_cell_dep = dependency('once_cell-1-rs')
 async_channel_dep = dependency('async-channel-2-rs')
 gtk_dep = dependency('gtk4-0.10-rs')
-zerocopy_dep = dependency('zerocopy-0.8-rs', default_options: {'feature-derive': true})
+zerocopy_dep = dependency('zerocopy-0.8-rs')
 
 executable('mandelbrot', 'src/main.rs',
   rust_dependency_map : {
