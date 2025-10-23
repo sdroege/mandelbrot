@@ -6,13 +6,6 @@ project('mandelbrot', 'rust',
                     ]
 )
 
-rustc = meson.get_compiler('rust')
-
-add_global_arguments(
-  '-C', 'embed-bitcode=no',
-  language: 'rust'
-)
-
 # the object is not used yet, but it triggers dependency resolution
 # and applies dependency features in Cargo.toml.
 cargo = import('rust').workspace()
