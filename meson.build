@@ -1,21 +1,21 @@
 project('mandelbrot', 'rust',
   version : '0.1.0',
   meson_version : '>= 1.10.99',
-  default_options : ['buildtype=debugoptimized',
-                     'rust_std=2018',
-                    ]
+  default_options : ['buildtype=debugoptimized']
 )
 
-# trigger dependency resolution and apply dependency features in Cargo.toml.
 cargo = import('rust').workspace()
-pkg = cargo.package()
+cargo.package().executable(install: true)
 
-# ultimately this becomes just:
-#   cargo.package().executable('mandelbrot', install: true)
-# for demonstration purposes, build arguments to executable() by hand
-executable('mandelbrot', 'src/main.rs',
-  rust_dependency_map : pkg.rust_dependency_map(),
-  rust_args: pkg.rust_args(),
-  dependencies : pkg.dependencies(),
-  install : true,
-)
+# the above line is mostly short for
+#
+#   pkg = cargo.package()
+#   executable('mandelbrot', 'src/main.rs',
+#     rust_dependency_map : pkg.rust_dependency_map(),
+#     rust_args: pkg.rust_args(),
+#     dependencies : pkg.dependencies(),
+#     install : true,
+#   )
+#
+# and also picks rust_std from the package.edition key.  It's possible that
+# in the future more code generation options will be handled via [profile].
