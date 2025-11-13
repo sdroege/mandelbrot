@@ -6,18 +6,17 @@ project('mandelbrot', 'rust',
                     ]
 )
 
-# the object is not used yet, but it triggers dependency resolution
-# and applies dependency features in Cargo.toml.
+# trigger dependency resolution and apply dependency features in Cargo.toml.
 cargo = import('rust').workspace()
 
-# later: cargo.package().executables() replaces everything below
-
-num_complex_dep = dependency('num-complex-0.4-rs')
-rayon_dep = dependency('rayon-1-rs')
-once_cell_dep = dependency('once_cell-1-rs')
-async_channel_dep = dependency('async-channel-2-rs')
-gtk_dep = dependency('gtk4-0.10-rs')
-zerocopy_dep = dependency('zerocopy-0.8-rs')
+# with the minimal PR https://github.com/mesonbuild/meson/pull/15158,
+# retrieve direct dependencies by hand
+num_complex_dep = cargo.subproject('num-complex').dependency()
+rayon_dep = cargo.subproject('rayon').dependency()
+once_cell_dep = cargo.subproject('once_cell').dependency()
+async_channel_dep = cargo.subproject('async-channel').dependency()
+gtk_dep = cargo.subproject('gtk4').dependency()
+zerocopy_dep = cargo.subproject('zerocopy').dependency()
 
 executable('mandelbrot', 'src/main.rs',
   rust_dependency_map : {
@@ -26,3 +25,6 @@ executable('mandelbrot', 'src/main.rs',
   dependencies : [gtk_dep, num_complex_dep, rayon_dep, once_cell_dep, async_channel_dep, zerocopy_dep],
   install : true,
 )
+
+# with the complete PR https://github.com/mesonbuild/meson/pull/15223:
+# cargo.package().executable('mandelbrot', install: true)
