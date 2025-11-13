@@ -12,11 +12,9 @@ mouse button.
 ### meson build
 
 For building the application with [meson](https://mesonbuild.com/), the
-following PR, that is a draft at the time of writing, is needed:
+following PR is needed:
 
-  * https://github.com/mesonbuild/meson/pull/15069
-
-The PR in turn is a superset of https://github.com/mesonbuild/meson/pull/14906.
+  * https://github.com/mesonbuild/meson/pull/15158
 
 ```bash
 # Building
