@@ -11,8 +11,10 @@ mouse button.
 
 ### meson build
 
-For building the application with [meson](https://mesonbuild.com/), latest git
-`master` or the upcoming 1.11 release are needed.
+For building the application with [meson](https://mesonbuild.com/), the
+following PR is needed:
+
+  * https://github.com/mesonbuild/meson/pull/15223
 
 ```bash
 # Building
@@ -23,6 +25,10 @@ _builddir/mandelbrot
 # Installing
 ninja -C _builddir install
 ```
+
+Alternatively, you can build commit 293437655db1287e2dd868e0de7677d5d90bd8dc
+of this repository with Meson's latest git `master` or with the upcoming
+1.11 release.
 
 Cross compilation is not supported yet.
 
