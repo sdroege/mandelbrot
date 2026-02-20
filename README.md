@@ -11,10 +11,8 @@ mouse button.
 
 ### meson build
 
-For building the application with [meson](https://mesonbuild.com/), the
-following PR is needed:
-
-  * https://github.com/mesonbuild/meson/pull/15158
+For building the application with [meson](https://mesonbuild.com/), latest git
+`master` or the upcoming 1.11 release are needed.
 
 ```bash
 # Building
