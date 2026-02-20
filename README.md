@@ -11,8 +11,9 @@ mouse button.
 
 ### meson build
 
-For building the application with [meson](https://mesonbuild.com/), latest git
-`master` or the upcoming 1.11 release are needed.
+For building the application with [meson](https://mesonbuild.com/), you
+need Meson's latest git `master` or the 1.11 release (not yet ready at
+the time of this writing).
 
 ```bash
 # Building
