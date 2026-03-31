@@ -4,8 +4,16 @@ project('mandelbrot', 'rust',
   default_options : ['buildtype=debugoptimized']
 )
 
+# This kinda sucks, but have GTK expand its subprojects.
+# gtk-rs starts resolving subprojects bottom-up, where
+# we end up with some truly ancient subprojects sometimes.
+dependency('gtk4')
+
 cargo = import('rust').workspace()
-cargo.package().executable(install: true)
+cargo.package().executable(
+  android_exe_type: 'application',
+  install: true
+)
 
 # the above line is mostly short for
 #
@@ -14,6 +22,7 @@ cargo.package().executable(install: true)
 #     rust_dependency_map : pkg.rust_dependency_map(),
 #     rust_args: pkg.rust_args(),
 #     dependencies : pkg.dependencies(),
+#     android_exe_type: 'application',
 #     install : true,
 #   )
 #
