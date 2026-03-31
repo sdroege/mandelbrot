@@ -1,0 +1,2 @@
+[binaries]
+rust=['/opt/rust/linux-x86/1.88.0/bin/rustc', '-C', 'panic=abort']

@@ -27,5 +27,9 @@
 		</glib>
 	</dependencies>
 	<build target="mandelbrot">
+		<configure-options>
+			<option>--cross=build-aux/android/rust.cross</option>
+			<option>--native=build-aux/android/rust.native</option>
+		</configure-options>
 	</build>
 </app>
