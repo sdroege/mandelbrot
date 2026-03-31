@@ -1,0 +1,32 @@
+name: Android
+
+on:
+  - push
+  - pull_request
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/sp1ritcs/mandelbrot/android-rust:latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup required dependencies
+        run: |
+          git clone https://github.com/bonzini/meson.git --branch cargo-cross --depth 1 meson-rust
+          git clone https://github.com/sp1ritCS/gtk-android-builder.git --branch android35 --depth 1 pixiewood
+      - name: Prepare
+        run: ./pixiewood/pixiewood prepare -a /opt/mini-studio --release -s "${ANDROID_HOME}" --meson ./meson-rust/meson.py build-aux/android/mandelbrot.xml
+      - name: Generate
+        run: ./pixiewood/pixiewood generate
+      - name: Build
+        run: ./pixiewood/pixiewood build
+      - name: Sign (Debug signature)
+        run: |
+          mkdir -p apks/
+          find .pixiewood/android/app/build/outputs/apk/release/ -type f -name '*.apk' -exec sh -c '${ANDROID_HOME}/build-tools/${ANDROID_SDKVER}/apksigner sign --ks "subprojects/gtk/.gitlab-ci/debug.keystore" --ks-pass "pass:android" --in "$0" --out "apks/$(basename "$0" | sed s/unsigned/debugsigned/g)"' {} \;
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: Mandelbrot
+          path: apks/
