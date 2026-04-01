@@ -1,34 +1,29 @@
-use gtk::{gio, glib, prelude::*};
+use gtk::{gio, prelude::*};
 
 mod widget;
 
-fn build_ui(application: &gtk::Application) {
-    let window = gtk::ApplicationWindow::new(application);
-    let widget = widget::Widget::new();
-    window.set_child(Some(&widget));
+fn make_application() -> gio::Application {
+    let application = gtk::Application::builder()
+        .application_id("net.coaxion.mandelbrot")
+        .build();
 
-    widget.grab_focus();
+    application.connect_activate(|app| {
+        let window = gtk::ApplicationWindow::new(app);
+        let widget = widget::Widget::new();
+        window.set_child(Some(&widget));
 
-    window.set_default_size(800, (800.0 / 1.75) as i32);
-    window.set_title(Some("Mandelbrot"));
+        widget.grab_focus();
 
-    window.connect_close_request(move |win| {
-        win.close();
-        glib::Propagation::Proceed
+        window.set_default_size(800, (800.0 / 1.75) as i32);
+        window.set_title(Some("Mandelbrot"));
+
+        window.present();
     });
 
-    window.show();
+    application.upcast()
 }
 
-fn main() {
-    let application = gtk::Application::new(
-        Some("net.coaxion.mandelbrot"),
-        gio::ApplicationFlags::empty(),
-    );
-
-    application.connect_startup(|app| {
-        build_ui(app);
-    });
-    application.connect_activate(|_| {});
-    application.run();
+fn main() -> gtk::glib::ExitCode {
+    let application = make_application();
+    application.run()
 }
