@@ -282,8 +282,8 @@ impl Widget {
                     view.height = MIN_HEIGHT;
                     view.width = new_size.0 as f64 / new_size.1 as f64 * MIN_HEIGHT;
                 }
-                view.x = view.x - view.width / 2.0;
-                view.y = view.y - view.height / 2.0;
+                view.x -= view.width / 2.0;
+                view.y -= view.height / 2.0;
             }
             self.view.set(view);
 
