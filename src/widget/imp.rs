@@ -90,10 +90,10 @@ impl Default for Widget {
         });
 
         let view = Rectangle {
-            x: -2.5,
-            y: -1.0,
-            width: 3.5,
-            height: 2.0,
+            x: -0.75,
+            y: 0.0,
+            width: 0.0,
+            height: 0.0,
         };
 
         let zoom_controller = gtk::GestureDrag::new();
@@ -265,13 +265,27 @@ impl Widget {
     fn on_resize(&self, width: i32, height: i32) {
         let old_size = self.surface_size.get();
         let new_size = (width as usize, height as usize);
-        if new_size != old_size {
-            if old_size.0 != 0 && old_size.1 != 0 && new_size.0 != 0 && new_size.1 != 0 {
-                let mut view = self.view.get();
+        if new_size != old_size && new_size.0 != 0 && new_size.1 != 0 {
+            let mut view = self.view.get();
+            if old_size.0 != 0 && old_size.1 != 0 {
                 view.width *= new_size.0 as f64 / old_size.0 as f64;
                 view.height *= new_size.1 as f64 / old_size.1 as f64;
-                self.view.set(view);
+            } else {
+                const MIN_WIDTH: f64 = 3.5;
+                const MIN_HEIGHT: f64 = 2.0;
+                if new_size.0 as f64 / new_size.1 as f64 * MIN_HEIGHT < MIN_WIDTH {
+                    // Constrained by width, derive height from aspect ratio
+                    view.width = MIN_WIDTH;
+                    view.height = new_size.1 as f64 / new_size.0 as f64 * MIN_WIDTH;
+                } else {
+                    // Width is fine, derive it from aspect ratio
+                    view.height = MIN_HEIGHT;
+                    view.width = new_size.0 as f64 / new_size.1 as f64 * MIN_HEIGHT;
+                }
+                view.x = view.x - view.width / 2.0;
+                view.y = view.y - view.height / 2.0;
             }
+            self.view.set(view);
 
             self.surface_size.set(new_size);
             self.obj().queue_draw();
