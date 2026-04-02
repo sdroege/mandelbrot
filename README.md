@@ -50,5 +50,5 @@ To see how a build setup might look like, consult the
 
 ### Screenshot
 
-![screenshot](https://raw.githubusercontent.com/sdroege/mandelbrot/master/screenshot.jpg)
-![screenshot android](screenshot-android.png)
+![screenshot](https://raw.githubusercontent.com/sdroege/mandelbrot/master/screenshot.png)
+![screenshot android](screenshot-android.jpg)
