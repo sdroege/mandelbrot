@@ -72,9 +72,9 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libgtk-4-dev ninja-build python3-pip
 
-    - name: Install meson 1.11.0rc2
+    - name: Install meson 1.11.0rc3
       run: |
-        pip3 install meson==1.11.0rc2
+        pip3 install meson==1.11.0rc3
 
     - name: Install stable toolchain
       uses: actions-rs/toolchain@v1
