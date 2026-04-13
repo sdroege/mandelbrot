@@ -1,6 +1,6 @@
 project('mandelbrot', 'rust',
   version : '0.1.0',
-  meson_version : '>= 1.10.99',
+  meson_version : '>= 1.11',
   default_options : ['buildtype=debugoptimized']
 )
 
